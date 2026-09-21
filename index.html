@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meus Gastos</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin:0; font-family:Arial,sans-serif; background:#f5f5f5; color:#222; }
+    .container { max-width:500px; margin:0 auto; padding:25px 18px; }
+    h1 { text-align:center; margin-bottom:30px; }
+    label { display:block; margin-bottom:6px; font-weight:bold; }
+    input { width:100%; padding:14px; font-size:18px; border:1px solid #ccc; border-radius:8px; margin-bottom:18px; }
+    button { width:100%; padding:15px; font-size:18px; font-weight:bold; border:none; border-radius:8px; background:#222; color:white; cursor:pointer; }
+    .gastos { margin-top:30px; }
+    .gasto { background:white; padding:14px; margin-bottom:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; }
+    .descricao,.valor { font-weight:bold; }
+    .vazio { text-align:center; color:#777; margin-top:30px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Meus Gastos</h1>
+    <label for="descricao">O que você comprou?</label>
+    <input type="text" id="descricao" placeholder="Ex.: gasolina">
+    <label for="valor">Quanto foi?</label>
+    <input type="number" id="valor" placeholder="R$ 0,00" step="0.01">
+    <button onclick="adicionarGasto()">Salvar gasto</button>
+    <div class="gastos" id="listaGastos">
+      <div class="vazio">Nenhum gasto registrado.</div>
+    </div>
+  </div>
+  <script>
+    function adicionarGasto() {
+      const descricao = document.getElementById("descricao").value.trim();
+      const valor = document.getElementById("valor").value;
+      if (!descricao || !valor) { alert("Preencha o gasto e o valor."); return; }
+      const lista = document.getElementById("listaGastos");
+      const vazio = lista.querySelector(".vazio");
+      if (vazio) vazio.remove();
+      const gasto = document.createElement("div");
+      gasto.className = "gasto";
+      gasto.innerHTML = '<span class="descricao"></span><span class="valor"></span>';
+      gasto.querySelector(".descricao").textContent = descricao;
+      gasto.querySelector(".valor").textContent = "R$ " + Number(valor).toFixed(2).replace(".", ",");
+      lista.prepend(gasto);
+      document.getElementById("descricao").value = "";
+      document.getElementById("valor").value = "";
+      document.getElementById("descricao").focus();
+    }
+  </script>
+</body>
+</html>

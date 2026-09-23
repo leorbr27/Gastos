@@ -49,7 +49,7 @@ async function ensureSchema() {
 const ALLOWED_ORIGIN = "https://leorbr27.github.io";
 const headers = (origin) => ({
   "Access-Control-Allow-Origin": origin === ALLOWED_ORIGIN ? origin : ALLOWED_ORIGIN,
-  "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+  "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
   "Content-Type": "application/json; charset=utf-8"
 });
@@ -116,6 +116,13 @@ export default async function handler(request) {
       if(!r.rowCount) return json({error:"Gasto não encontrado."},404,origin);
       const rows=await expenseQuery("where e.id=$1",[expenseId]);
       return json(rows[0],200,origin);
+    }
+
+    if(request.method==="DELETE" && /\/expenses\/?\d+$/.test(path)) {
+      const match=path.match(/(\d+)$/), expenseId=Number(match[1]);
+      const r=await pool.query("delete from expenses where id=$1 returning id",[expenseId]);
+      if(!r.rowCount) return json({error:"Gasto não encontrado."},404,origin);
+      return new Response(null,{status:204,headers:headers(origin)});
     }
 
     if(request.method==="POST" && path.endsWith("/expenses")) {

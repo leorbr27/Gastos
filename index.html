@@ -52,7 +52,7 @@ button{border:0;border-radius:12px;height:48px;padding:0 18px;font-size:16px;fon
 </section>
 </div>
 <script>
-const API_BASE="/api";
+const API_BASE="https://br-billowing-river-b43fz1vp-api.compute.c-6.us-east-2.aws.neon.tech";
 const $=id=>document.getElementById(id);
 const brl=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const today=new Date(); $("data").value=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#4f46e5"><title>Baixar dados — Gastos</title>
+<style>
+:root{--bg:#f5f7fb;--card:#fff;--ink:#172033;--muted:#6b7280;--line:#e7eaf0;--primary:#4f46e5;--green:#059669}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#eef2ff,#f7f8fc 260px);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Arial,sans-serif}.container{max-width:700px;margin:auto;padding:24px 16px 50px}header{margin-bottom:18px}h1{margin:0 0 5px;font-size:32px;letter-spacing:-.8px}p{margin:0;color:var(--muted)}.card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:20px;box-shadow:0 8px 28px rgba(35,45,75,.07);margin-bottom:14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}label{display:block;font-size:13px;font-weight:800;margin-bottom:7px}input,select{width:100%;height:48px;border:1px solid #d7dbe5;border-radius:13px;padding:0 13px;font-size:16px;background:#fff}.full{grid-column:1/-1}.buttons{display:flex;gap:10px;margin-top:15px}button{height:48px;border:0;border-radius:13px;padding:0 17px;font-weight:800;font-size:15px;cursor:pointer}.primary{flex:1;color:#fff;background:linear-gradient(135deg,#4f46e5,#7c3aed)}.secondary{background:#eef2ff;color:#4338ca}.info{background:#ecfdf5;color:#047857;padding:12px;border-radius:12px;margin-bottom:14px}.preview{font-size:14px;line-height:1.6;color:#4b5563}.status{margin-top:14px;padding:12px;border-radius:12px;display:none}.status.show{display:block;background:#fef2f2;color:#b91c1c}@media(max-width:540px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.buttons{flex-direction:column}}
+</style>
+</head>
+<body><div class="container">
+<header><button class="secondary" onclick="location.href='index.html'">← Voltar</button><h1 style="margin-top:18px">Baixar dados</h1><p>Escolha exatamente o período e os filtros da planilha.</p></header>
+<section class="card">
+<div class="info">Os gastos dos meses anteriores permanecem no banco. Você pode exportar um mês específico, um intervalo ou todo o histórico.</div>
+<div class="grid">
+<div><label for="inicio">Data inicial</label><input id="inicio" type="date"></div>
+<div><label for="fim">Data final</label><input id="fim" type="date"></div>
+<div><label for="categoria">Categoria</label><select id="categoria"><option value="">Todas</option></select></div>
+<div><label for="pagamento">Meio de pagamento</label><select id="pagamento"><option value="">Todos</option></select></div>
+</div>
+<div class="buttons"><button class="primary" id="baixar">Baixar planilha Excel</button><button class="secondary" id="csv">Baixar CSV</button></div>
+<div id="status" class="status"></div>
+</section>
+<section class="card"><strong>Prévia</strong><div id="preview" class="preview" style="margin-top:8px">Carregando dados...</div></section>
+</div>
+<script>
+const API_BASE="https://br-billowing-river-b43fz1vp-api.compute.c-6.us-east-2.aws.neon.tech";
+const $=id=>document.getElementById(id);let categories=[],cards=[],expenses=[];
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+const brl=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const isoToday=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
+async function api(path){const r=await fetch(API_BASE+path);if(!r.ok)throw new Error("Não foi possível consultar a API.");return r.json()}
+function filter(){const s=$("inicio").value,e=$("fim").value,c=$("categoria").value,p=$("pagamento").value;return expenses.filter(x=>(!s||x.expense_date>=s)&&(!e||x.expense_date<=e)&&(!c||String(x.category_id)===c)&&(!p||String(x.card_id)===p))}
+function update(){const l=filter(),total=l.reduce((s,x)=>s+Number(x.amount),0);$("preview").innerHTML='<b>'+l.length+'</b> lançamento(s) · <b>'+brl(total)+'</b><br>Filtros aplicados: '+($("inicio").value||"início")+' até '+($("fim").value||"fim")+' · '+($("categoria").selectedOptions[0]?.text||"Todas")+' · '+($("pagamento").selectedOptions[0]?.text||"Todos")}
+function rows(){return filter().map(x=>({Data:x.expense_date,Descrição:x.description,Valor:Number(x.amount),Categoria:x.category_name||"Sem categoria","Meio de pagamento":x.card_name||"Não informado"}))}
+function downloadXlsx(){const data=rows();if(!data.length){alert("Não há gastos para os filtros selecionados.");return}if(!window.XLSX){downloadCsv();return}const ws=XLSX.utils.json_to_sheet(data);ws["!cols"]=[{wch:13},{wch:34},{wch:14},{wch:22},{wch:25}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Gastos");XLSX.writeFile(wb,"gastos_"+($("inicio").value||"inicio")+"_"+($("fim").value||"fim")+".xlsx")}
+function downloadCsv(){const data=rows();if(!data.length){alert("Não há gastos para os filtros selecionados.");return}const head=Object.keys(data[0]);const csv=[head,...data.map(r=>head.map(k=>'"'+String(r[k]??"").replace(/"/g,'""')+'"'))].map(r=>r.join(";")).join("\n");const blob=new Blob(["\\ufeff"+csv],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="gastos_"+($("inicio").value||"inicio")+"_"+($("fim").value||"fim")+".csv";a.click();URL.revokeObjectURL(a.href)}
+function fill(){ $("categoria").innerHTML='<option value="">Todas</option>'+categories.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");$("pagamento").innerHTML='<option value="">Todos</option>'+cards.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")}
+async function load(){try{const d=await api("/bootstrap");categories=d.categories||[];cards=d.cards||[];expenses=d.expenses||[];fill();const t=isoToday();$("inicio").value=t.slice(0,7)+"-01";$("fim").value=t;update()}catch(e){$("status").textContent=e.message;$("status").classList.add("show")}}
+$("inicio").onchange=update;$("fim").onchange=update;$("categoria").onchange=update;$("pagamento").onchange=update;$("baixar").onclick=downloadXlsx;$("csv").onclick=downloadCsv;load();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</body></html>

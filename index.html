@@ -1,53 +1,93 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Meus Gastos</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { margin:0; font-family:Arial,sans-serif; background:#f5f5f5; color:#222; }
-    .container { max-width:500px; margin:0 auto; padding:25px 18px; }
-    h1 { text-align:center; margin-bottom:30px; }
-    label { display:block; margin-bottom:6px; font-weight:bold; }
-    input { width:100%; padding:14px; font-size:18px; border:1px solid #ccc; border-radius:8px; margin-bottom:18px; }
-    button { width:100%; padding:15px; font-size:18px; font-weight:bold; border:none; border-radius:8px; background:#222; color:white; cursor:pointer; }
-    .gastos { margin-top:30px; }
-    .gasto { background:white; padding:14px; margin-bottom:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; }
-    .descricao,.valor { font-weight:bold; }
-    .vazio { text-align:center; color:#777; margin-top:30px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>Gastos</title>
+<style>
+:root{--bg:#f3f4f6;--card:#fff;--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--accent:#111827;--danger:#b91c1c;--radius:18px}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Arial,sans-serif}
+.container{max-width:760px;margin:auto;padding:22px 16px 44px}
+header{padding:8px 4px 20px}h1{font-size:32px;margin:0 0 5px;letter-spacing:-.8px}header p{margin:0;color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:14px;box-shadow:0 4px 18px rgba(17,24,39,.04)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}
+label{display:block;font-size:13px;font-weight:700;margin:0 0 7px;color:#374151}
+input,select{width:100%;height:48px;border:1px solid #d1d5db;border-radius:12px;background:#fff;padding:0 13px;font-size:16px;color:var(--ink);outline:none}
+input:focus,select:focus{border-color:#6b7280;box-shadow:0 0 0 3px rgba(17,24,39,.08)}
+button{border:0;border-radius:12px;height:48px;padding:0 18px;font-size:16px;font-weight:750;cursor:pointer}
+.primary{width:100%;background:var(--accent);color:#fff;margin-top:14px}.secondary{background:#f3f4f6;color:var(--ink)}
+.toolbar{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.summary{display:grid;grid-template-columns:1fr 1fr;gap:10px}.metric{background:#f9fafb;border-radius:14px;padding:14px}.metric small{display:block;color:var(--muted);font-size:12px}.metric strong{display:block;font-size:22px;margin-top:3px}
+.item{padding:14px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px}.item:last-child{border-bottom:0}.desc{font-weight:700}.meta{font-size:12px;color:var(--muted);margin-top:4px}.amount{font-weight:800;white-space:nowrap}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#f3f4f6;color:#4b5563;font-size:11px;margin-left:4px}
+.empty{text-align:center;color:var(--muted);padding:24px 5px}.status{display:none;border-radius:12px;padding:11px 13px;margin-bottom:14px;font-size:14px}.status.show{display:block}.error{background:#fef2f2;color:var(--danger)}
+@media(max-width:560px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.toolbar{grid-template-columns:1fr}.container{padding-top:16px}}
+</style>
 </head>
 <body>
-  <div class="container">
-    <h1>Meus Gastos</h1>
-    <label for="descricao">O que você comprou?</label>
-    <input type="text" id="descricao" placeholder="Ex.: gasolina">
-    <label for="valor">Quanto foi?</label>
-    <input type="number" id="valor" placeholder="R$ 0,00" step="0.01">
-    <button onclick="adicionarGasto()">Salvar gasto</button>
-    <div class="gastos" id="listaGastos">
-      <div class="vazio">Nenhum gasto registrado.</div>
-    </div>
-  </div>
-  <script>
-    function adicionarGasto() {
-      const descricao = document.getElementById("descricao").value.trim();
-      const valor = document.getElementById("valor").value;
-      if (!descricao || !valor) { alert("Preencha o gasto e o valor."); return; }
-      const lista = document.getElementById("listaGastos");
-      const vazio = lista.querySelector(".vazio");
-      if (vazio) vazio.remove();
-      const gasto = document.createElement("div");
-      gasto.className = "gasto";
-      gasto.innerHTML = '<span class="descricao"></span><span class="valor"></span>';
-      gasto.querySelector(".descricao").textContent = descricao;
-      gasto.querySelector(".valor").textContent = "R$ " + Number(valor).toFixed(2).replace(".", ",");
-      lista.prepend(gasto);
-      document.getElementById("descricao").value = "";
-      document.getElementById("valor").value = "";
-      document.getElementById("descricao").focus();
-    }
-  </script>
-</body>
-</html>
+<div class="container">
+<header><h1>Meus gastos</h1><p>Controle por categoria, cartão e período.</p></header>
+<div id="status" class="status error"></div>
+<section class="card">
+<div class="grid">
+<div class="full"><label for="descricao">Descrição</label><input id="descricao" placeholder="Ex.: supermercado, gasolina, internet"></div>
+<div><label for="valor">Valor</label><input id="valor" inputmode="decimal" type="number" min="0.01" step="0.01" placeholder="0,00"></div>
+<div><label for="data">Data</label><input id="data" type="date"></div>
+<div><label for="categoria">Categoria</label><select id="categoria"><option value="">Selecione</option></select></div>
+<div><label for="cartao">Cartão usado</label><select id="cartao"><option value="">Nenhum / não informado</option></select></div>
+<div><label for="novoCartao">Novo cartão</label><input id="novoCartao" placeholder="Ex.: Nubank"></div>
+</div>
+<button class="primary" id="salvar">Salvar gasto</button>
+</section>
+<section class="card">
+<div class="summary"><div class="metric"><small>Total filtrado</small><strong id="total">R$ 0,00</strong></div><div class="metric"><small>Quantidade</small><strong id="quantidade">0</strong></div></div>
+</section>
+<section class="card">
+<div class="toolbar">
+<div><label for="fCategoria">Categoria</label><select id="fCategoria"><option value="">Todas</option></select></div>
+<div><label for="fCartao">Cartão</label><select id="fCartao"><option value="">Todos</option></select></div>
+</div>
+<div id="lista" style="margin-top:8px"><div class="empty">Carregando gastos...</div></div>
+</section>
+</div>
+<script>
+const API_BASE="/api";
+const $=id=>document.getElementById(id);
+const brl=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const today=new Date(); $("data").value=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);
+let categories=[],cards=[],expenses=[];
+function status(msg){$("status").textContent=msg;$("status").classList.add("show")}
+async function api(path,options={}){const r=await fetch(API_BASE+path,{headers:{"Content-Type":"application/json"},...options});if(!r.ok)throw new Error(await r.text()||"Erro na API");return r.status===204?null:r.json()}
+function fillSelects(){
+ $("categoria").innerHTML='<option value="">Selecione</option>'+categories.map(x=>`<option value="${x.id}">${x.name}</option>`).join("");
+ $("fCategoria").innerHTML='<option value="">Todas</option>'+categories.map(x=>`<option value="${x.id}">${x.name}</option>`).join("");
+ $("cartao").innerHTML='<option value="">Nenhum / não informado</option>'+cards.map(x=>`<option value="${x.id}">${x.name}</option>`).join("");
+ $("fCartao").innerHTML='<option value="">Todos</option>'+cards.map(x=>`<option value="${x.id}">${x.name}</option>`).join("");
+}
+function render(){
+ const cf=$("fCategoria").value, kf=$("fCartao").value;
+ const list=expenses.filter(x=>(!cf||String(x.category_id)===cf)&&(!kf||String(x.card_id)===kf));
+ $("total").textContent=brl(list.reduce((s,x)=>s+Number(x.amount),0));$("quantidade").textContent=list.length;
+ $("lista").innerHTML=list.length?list.map(x=>`<div class="item"><div><div class="desc">${esc(x.description)}</div><div class="meta">${esc(x.category_name||"Sem categoria")} · ${esc(x.expense_date||"")} ${x.card_name?`<span class="badge">${esc(x.card_name)}</span>`:""}</div></div><div class="amount">${brl(x.amount)}</div></div>`).join(""):'<div class="empty">Nenhum gasto encontrado.</div>';
+}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+async function load(){
+ try{const d=await api("/bootstrap");categories=d.categories||[];cards=d.cards||[];expenses=d.expenses||[];fillSelects();render();$("status").classList.remove("show")}
+ catch(e){status("A interface está pronta, mas a API do Neon ainda não está publicada neste endereço. Nenhum dado é salvo no navegador.")}
+}
+$("salvar").onclick=async()=>{
+ const description=$("descricao").value.trim(), amount=Number($("valor").value), category_id=$("categoria").value||null, expense_date=$("data").value;
+ if(!description||!amount||amount<=0||!expense_date){alert("Preencha descrição, valor e data.");return}
+ try{
+  let card_id=$("cartao").value||null;
+  const newCard=$("novoCartao").value.trim();
+  if(newCard){const c=await api("/cards",{method:"POST",body:JSON.stringify({name:newCard})});cards.push(c);card_id=c.id;fillSelects();$("cartao").value=card_id;$("novoCartao").value=""}
+  const e=await api("/expenses",{method:"POST",body:JSON.stringify({description,amount,category_id,card_id,expense_date})});
+  expenses.unshift({...e,category_name:categories.find(c=>String(c.id)===String(category_id))?.name||"",card_name:cards.find(c=>String(c.id)===String(card_id))?.name||""});
+  $("descricao").value="";$("valor").value="";render();$("descricao").focus();
+ }catch(e){status("Não foi possível salvar. A API do Neon ainda precisa estar disponível.");}
+};
+$("fCategoria").onchange=render;$("fCartao").onchange=render;load();
+</script>
+</body></html>

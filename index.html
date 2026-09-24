@@ -8,14 +8,16 @@
 *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#eef2ff 0,#f7f8fc 250px);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Arial,sans-serif}
 .container{max-width:920px;margin:auto;padding:20px 16px 48px}header{padding:8px 4px 18px;display:flex;justify-content:space-between;align-items:flex-end;gap:12px}h1{font-size:34px;margin:0 0 4px;letter-spacing:-1px}header p{margin:0;color:var(--muted)}.header-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .card{background:var(--card);border:1px solid rgba(255,255,255,.8);border-radius:var(--radius);padding:18px;margin-bottom:15px;box-shadow:0 8px 28px rgba(35,45,75,.07)}
+.section-title{font-weight:850;font-size:21px;line-height:1.2;margin:0 0 12px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}label{display:block;font-size:13px;font-weight:750;margin:0 0 7px;color:#374151}
 input,select{width:100%;height:48px;border:1px solid #d7dbe5;border-radius:13px;background:#fff;padding:0 13px;font-size:16px;color:var(--ink);outline:none}input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(79,70,229,.12)}
-button{border:0;border-radius:13px;height:46px;padding:0 16px;font-size:15px;font-weight:800;cursor:pointer}.primary{width:100%;background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;margin-top:14px}.secondary{background:#eef2ff;color:#4338ca}.ghost{background:#f3f4f6;color:#374151}.edit{height:34px;padding:0 11px;background:#eef2ff;color:#4338ca;font-size:12px}.delete{height:34px;padding:0 11px;background:#fef2f2;color:#b91c1c;font-size:12px}
+button{border:0;border-radius:13px;height:46px;padding:0 16px;font-size:15px;font-weight:800;cursor:pointer}.primary{width:100%;background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;margin-top:14px}.secondary{background:#eef2ff;color:#4338ca}.ghost{background:#f3f4f6;color:#374151}
+.edit,.delete{height:30px;width:32px;padding:0;background:transparent;font-size:19px;line-height:1;border-radius:8px}.edit:hover{background:#eef2ff}.delete:hover{background:#fef2f2}
 .toolbar{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}.summary{display:grid;grid-template-columns:1fr 1fr;gap:10px}.metric{border-radius:15px;padding:15px;background:linear-gradient(135deg,#eef2ff,#f5f3ff)}.metric:nth-child(2){background:linear-gradient(135deg,#ecfdf5,#f0fdfa)}.metric small{display:block;color:var(--muted);font-size:12px}.metric strong{display:block;font-size:23px;margin-top:3px}
 .charts{display:grid;grid-template-columns:1fr 1fr;gap:14px}.chart-card{border:1px solid var(--line);border-radius:16px;padding:14px}.chart-title{font-weight:800;margin-bottom:8px}.chart-wrap{min-height:210px;display:flex;align-items:center;justify-content:center}.legend{display:grid;gap:7px;margin-top:8px}.legend-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}.dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:7px}
-.item{padding:13px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;align-items:center}.item:last-child{border-bottom:0}.desc{font-weight:800}.meta{font-size:12px;color:var(--muted);margin-top:4px}.amount{font-weight:850;white-space:nowrap}.item-actions{display:flex;align-items:center;gap:10px}.badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:11px;margin-left:4px}
+.item{padding:13px 0;border-bottom:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px}.item:last-child{border-bottom:0}.desc{font-weight:800}.meta{font-size:12px;color:var(--muted);margin-top:4px}.amount{font-weight:850;white-space:nowrap}.item-actions{grid-column:1/-1;display:flex;align-items:center;justify-content:flex-start;gap:4px;min-height:30px}.payment{font-size:12px;color:var(--muted);margin-right:4px}.badge{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:11px}
 .empty{text-align:center;color:var(--muted);padding:24px 5px}.status{display:none;border-radius:13px;padding:11px 13px;margin-bottom:14px;font-size:14px}.status.show{display:block}.error{background:#fef2f2;color:#b91c1c}.ok{background:#ecfdf5;color:#047857}.edit-mode{background:#fff7ed;border-color:#fed7aa}
-@media(max-width:680px){.charts{grid-template-columns:1fr}.toolbar{grid-template-columns:1fr 1fr}.header-actions{justify-content:flex-start}header{display:block}.header-actions{margin-top:12px}}@media(max-width:520px){.grid,.toolbar{grid-template-columns:1fr}.full{grid-column:auto}.container{padding-top:14px}.item{align-items:flex-start}.item-actions{flex-direction:column;align-items:flex-end}}
+@media(max-width:680px){.charts{grid-template-columns:1fr}.toolbar{grid-template-columns:1fr 1fr}.header-actions{justify-content:flex-start}header{display:block}.header-actions{margin-top:12px}}@media(max-width:520px){.grid,.toolbar{grid-template-columns:1fr}.full{grid-column:auto}.container{padding-top:14px}}
 </style>
 </head>
 <body>
@@ -23,7 +25,7 @@ button{border:0;border-radius:13px;height:46px;padding:0 16px;font-size:15px;fon
 <header><div><h1>Meus gastos</h1><p>Controle por período, categoria e meio de pagamento.</p></div><div class="header-actions"><button class="secondary" id="baixar">Baixar dados</button></div></header>
 <div id="status" class="status"></div>
 <section class="card" id="formCard">
-<div style="font-weight:850;font-size:18px;margin-bottom:14px" id="formTitle">Novo gasto</div>
+<div class="section-title" id="formTitle">Novo gasto</div>
 <div class="grid">
 <div class="full"><label for="descricao">Descrição</label><input id="descricao" placeholder="Ex.: supermercado, gasolina, internet"></div>
 <div><label for="valor">Valor</label><input id="valor" inputmode="decimal" type="number" min="0.01" step="0.01" placeholder="0,00"></div>
@@ -36,20 +38,20 @@ button{border:0;border-radius:13px;height:46px;padding:0 16px;font-size:15px;fon
 <button class="ghost" id="cancelar" style="display:none;width:100%;margin-top:8px">Cancelar edição</button>
 </section>
 
-<section class="card"><div class="summary"><div class="metric"><small>Total exibido</small><strong id="total">R$ 0,00</strong></div><div class="metric"><small>Quantidade</small><strong id="quantidade">0</strong></div></div></section>
+<section class="card"><div class="section-title">Resumo</div><div class="summary"><div class="metric"><small>Total exibido</small><strong id="total">R$ 0,00</strong></div><div class="metric"><small>Quantidade</small><strong id="quantidade">0</strong></div></div></section>
 
-<section class="card"><div class="toolbar">
+<section class="card"><div class="section-title">Filtros</div><div class="toolbar">
 <div><label for="fPeriodo">Período</label><select id="fPeriodo"></select></div>
 <div><label for="fCategoria">Categoria</label><select id="fCategoria"><option value="">Todas</option></select></div>
 <div><label for="fPagamento">Meio de pagamento</label><select id="fPagamento"><option value="">Todos</option></select></div>
 </div></section>
 
-<section class="card"><div class="charts">
+<section class="card"><div class="section-title">Análises</div><div class="charts">
 <div class="chart-card"><div class="chart-title">Gastos por categoria</div><div class="chart-wrap" id="chartCategoria"></div><div class="legend" id="legendCategoria"></div></div>
 <div class="chart-card"><div class="chart-title">Gastos por meio de pagamento</div><div class="chart-wrap" id="chartPagamento"></div><div class="legend" id="legendPagamento"></div></div>
 </div></section>
 
-<section class="card"><div style="font-weight:850;margin-bottom:4px">Lançamentos</div><div id="lista"><div class="empty">Carregando gastos...</div></div></section>
+<section class="card"><div class="section-title">Lançamentos</div><div id="lista"><div class="empty">Carregando gastos...</div></div></section>
 </div>
 
 <script>
@@ -59,75 +61,25 @@ const brl=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL
 const isoToday=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)};
 $("data").value=isoToday();
 let categories=[],cards=[],expenses=[],editingId=null;
-
 async function api(path,options={}){const r=await fetch(API_BASE+path,{headers:{"Content-Type":"application/json"},...options});if(!r.ok)throw new Error((await r.json().catch(()=>null))?.error||"Erro na API");return r.status===204?null:r.json()}
 function showStatus(msg,type="error"){const s=$("status");s.textContent=msg;s.className="status show "+(type==="ok"?"ok":"error");clearTimeout(window.statusTimer);window.statusTimer=setTimeout(()=>s.classList.remove("show"),5000)}
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 function monthStart(date=new Date()){return new Date(date.getFullYear(),date.getMonth(),1)}
 function ym(d){return d.toISOString().slice(0,7)}
 function monthLabel(key){const [y,m]=key.split("-");return new Date(Number(y),Number(m)-1,1).toLocaleDateString("pt-BR",{month:"long",year:"numeric"})}
-function buildPeriods(){
- const keys=[...new Set(expenses.map(x=>String(x.expense_date).slice(0,7)))];
- const current=ym(monthStart());
- if(!keys.includes(current)) keys.push(current);
- keys.sort((a,b)=>b.localeCompare(a));
- $("fPeriodo").innerHTML='<option value="current">Mês atual — '+monthLabel(current)+'</option><option value="all">Todos os períodos</option>'+keys.filter(k=>k!==current).map(k=>'<option value="'+k+'">'+monthLabel(k)+'</option>').join("");
- $("fPeriodo").value="current";
-}
-function fillSelects(){
- $("categoria").innerHTML='<option value="">Selecione</option>'+categories.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");
- $("fCategoria").innerHTML='<option value="">Todas</option>'+categories.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");
- $("pagamento").innerHTML='<option value="">Selecione</option>'+cards.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");
- $("fPagamento").innerHTML='<option value="">Todos</option>'+cards.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");
-}
-function filtered(){
- const period=$("fPeriodo").value, cf=$("fCategoria").value, pf=$("fPagamento").value;
- return expenses.filter(x=>{
-   const p=String(x.expense_date).slice(0,7);
-   return (period==="all"||p===(period==="current"?ym(monthStart()):period)) && (!cf||String(x.category_id)===cf) && (!pf||String(x.card_id)===pf);
- });
-}
+function buildPeriods(){const keys=[...new Set(expenses.map(x=>String(x.expense_date).slice(0,7)))];const current=ym(monthStart());if(!keys.includes(current))keys.push(current);keys.sort((a,b)=>b.localeCompare(a));$("fPeriodo").innerHTML='<option value="current">Mês atual — '+monthLabel(current)+'</option><option value="all">Todos os períodos</option>'+keys.filter(k=>k!==current).map(k=>'<option value="'+k+'">'+monthLabel(k)+'</option>').join("");$("fPeriodo").value="current"}
+function fillSelects(){$("categoria").innerHTML='<option value="">Selecione</option>'+categories.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");$("fCategoria").innerHTML='<option value="">Todas</option>'+categories.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");$("pagamento").innerHTML='<option value="">Selecione</option>'+cards.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("");$("fPagamento").innerHTML='<option value="">Todos</option>'+cards.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join("")}
+function filtered(){const period=$("fPeriodo").value,cf=$("fCategoria").value,pf=$("fPagamento").value;return expenses.filter(x=>{const p=String(x.expense_date).slice(0,7);return(period==="all"||p===(period==="current"?ym(monthStart()):period))&&(!cf||String(x.category_id)===cf)&&(!pf||String(x.card_id)===pf)})}
 const chartColors=["#4f46e5","#7c3aed","#0891b2","#059669","#f59e0b","#ef4444","#ec4899","#64748b","#14b8a6","#8b5cf6"];
-function renderDonut(el,legend,data){
- const total=data.reduce((s,x)=>s+x.value,0);
- if(!total){$(el).innerHTML='<div class="empty">Sem dados</div>';$(legend).innerHTML="";return}
- let a=-Math.PI/2, paths="", rows="";
- data.forEach((x,i)=>{const b=a+x.value/total*Math.PI*2, r=76, cx=100,cy=100,large=b-a>Math.PI?1:0;const x1=cx+r*Math.cos(a),y1=cy+r*Math.sin(a),x2=cx+r*Math.cos(b),y2=cy+r*Math.sin(b);paths+='<path d="M '+cx+' '+cy+' L '+x1+' '+y1+' A '+r+' '+r+' 0 '+large+' 1 '+x2+' '+y2+' Z" fill="'+chartColors[i%chartColors.length]+'"></path>';rows+='<div class="legend-row"><span><i class="dot" style="background:'+chartColors[i%chartColors.length]+'"></i>'+esc(x.name)+'</span><b>'+brl(x.value)+'</b></div>';a=b});
- $(el).innerHTML='<svg viewBox="0 0 200 200" width="190" height="190">'+paths+'<circle cx="100" cy="100" r="45" fill="white"></circle><text x="100" y="96" text-anchor="middle" font-size="11" fill="#6b7280">Total</text><text x="100" y="114" text-anchor="middle" font-size="13" font-weight="800" fill="#172033">'+brl(total)+'</text></svg>';
- $(legend).innerHTML=rows;
-}
-function renderCharts(list){
- const by=(key,name)=>{const m=new Map();list.forEach(x=>{const n=x[key]||"Não informado";m.set(n,(m.get(n)||0)+Number(x.amount))});return [...m].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value)};
- renderDonut("chartCategoria","legendCategoria",by("category_name"));
- renderDonut("chartPagamento","legendPagamento",by("card_name"));
-}
-function render(){
- const list=filtered();
- $("total").textContent=brl(list.reduce((s,x)=>s+Number(x.amount),0));$("quantidade").textContent=list.length;
- renderCharts(list);
- $("lista").innerHTML=list.length?list.map(x=>'<div class="item"><div><div class="desc">'+esc(x.description)+'</div><div class="meta">'+esc(x.category_name||"Sem categoria")+' · '+esc(x.expense_date)+' · <span class="badge">'+esc(x.card_name||"Não informado")+'</span></div></div><div class="item-actions"><strong class="amount">'+brl(x.amount)+'</strong><button class="edit" onclick="editar('+x.id+')">Editar</button><button class="delete" onclick="excluir('+x.id+')">Excluir</button></div></div>').join(""):'<div class="empty">Nenhum gasto encontrado neste período.</div>';
-}
+function renderDonut(el,legend,data){const total=data.reduce((s,x)=>s+x.value,0);if(!total){$(el).innerHTML='<div class="empty">Sem dados</div>';$(legend).innerHTML="";return}let a=-Math.PI/2,paths="",rows="";data.forEach((x,i)=>{const b=a+x.value/total*Math.PI*2,r=76,cx=100,cy=100,large=b-a>Math.PI?1:0,x1=cx+r*Math.cos(a),y1=cy+r*Math.sin(a),x2=cx+r*Math.cos(b),y2=cy+r*Math.sin(b);paths+='<path d="M '+cx+' '+cy+' L '+x1+' '+y1+' A '+r+' '+r+' 0 '+large+' 1 '+x2+' '+y2+' Z" fill="'+chartColors[i%chartColors.length]+'"></path>';rows+='<div class="legend-row"><span><i class="dot" style="background:'+chartColors[i%chartColors.length]+'"></i>'+esc(x.name)+'</span><b>'+brl(x.value)+'</b></div>';a=b});$(el).innerHTML='<svg viewBox="0 0 200 200" width="190" height="190">'+paths+'<circle cx="100" cy="100" r="45" fill="white"></circle><text x="100" y="96" text-anchor="middle" font-size="11" fill="#6b7280">Total</text><text x="100" y="114" text-anchor="middle" font-size="13" font-weight="800" fill="#172033">'+brl(total)+'</text></svg>';$(legend).innerHTML=rows}
+function renderCharts(list){const by=key=>{const m=new Map();list.forEach(x=>{const n=x[key]||"Não informado";m.set(n,(m.get(n)||0)+Number(x.amount))});return[...m].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value)};renderDonut("chartCategoria","legendCategoria",by("category_name"));renderDonut("chartPagamento","legendPagamento",by("card_name"))}
+function render(){const list=filtered();$("total").textContent=brl(list.reduce((s,x)=>s+Number(x.amount),0));$("quantidade").textContent=list.length;renderCharts(list);$("lista").innerHTML=list.length?list.map(x=>'<div class="item"><div><div class="desc">'+esc(x.description)+'</div><div class="meta">'+esc(x.category_name||"Sem categoria")+' · '+esc(x.expense_date)+'</div></div><strong class="amount">'+brl(x.amount)+'</strong><div class="item-actions"><span class="payment">💳 '+esc(x.card_name||"Não informado")+'</span><button class="edit" title="Editar" aria-label="Editar" onclick="editar('+x.id+')">✏️</button><button class="delete" title="Excluir" aria-label="Excluir" onclick="excluir('+x.id+')">🗑️</button></div></div>').join(""):'<div class="empty">Nenhum gasto encontrado neste período.</div>'}
 function resetForm(){editingId=null;$("formCard").classList.remove("edit-mode");$("formTitle").textContent="Novo gasto";$("salvar").textContent="Salvar gasto";$("cancelar").style.display="none";$("descricao").value="";$("valor").value="";$("categoria").value="";$("pagamento").value="";$("novoPagamento").value="";$("data").value=isoToday()}
-window.excluir=async id=>{const x=expenses.find(e=>Number(e.id)===Number(id));if(!x)return;if(!confirm('Excluir o gasto "'+x.description+'"? Esta ação não pode ser desfeita.'))return;try{await api('/expenses/'+id,{method:'DELETE'});expenses=expenses.filter(e=>Number(e.id)!==Number(id));buildPeriods();render();if(Number(editingId)===Number(id))resetForm();showStatus('Gasto excluído com sucesso.','ok')}catch(e){showStatus(e.message||'Não foi possível excluir o gasto.')}};
+window.excluir=async id=>{const x=expenses.find(e=>Number(e.id)===Number(id));if(!x)return;if(!confirm('Excluir o gasto "'+x.description+'"? Esta ação não pode ser desfeita.'))return;try{await api("/expenses/"+id,{method:"DELETE"});expenses=expenses.filter(e=>Number(e.id)!==Number(id));buildPeriods();render();if(Number(editingId)===Number(id))resetForm();showStatus("Gasto excluído com sucesso.","ok")}catch(e){showStatus(e.message||"Não foi possível excluir o gasto.")}};
 window.editar=id=>{const x=expenses.find(e=>Number(e.id)===Number(id));if(!x)return;editingId=id;$("formCard").classList.add("edit-mode");$("formTitle").textContent="Editando gasto";$("salvar").textContent="Salvar alteração";$("cancelar").style.display="block";$("descricao").value=x.description;$("valor").value=x.amount;$("data").value=x.expense_date;$("categoria").value=x.category_id||"";$("pagamento").value=x.card_id||"";$("novoPagamento").value="";window.scrollTo({top:0,behavior:"smooth"})};
 $("cancelar").onclick=resetForm;
-$("salvar").onclick=async()=>{
- const description=$("descricao").value.trim(),amount=Number($("valor").value),category_id=$("categoria").value||null,expense_date=$("data").value;
- if(!description||!amount||amount<=0||!expense_date){alert("Preencha descrição, valor e data.");return}
- try{
-  let card_id=$("pagamento").value||null;
-  const newPayment=$("novoPagamento").value.trim();
-  if(newPayment){const c=await api("/cards",{method:"POST",body:JSON.stringify({name:newPayment})});if(!cards.some(x=>String(x.id)===String(c.id)))cards.push(c);fillSelects();card_id=c.id}
-  const path=editingId?"/expenses/"+editingId:"/expenses";
-  const e=await api(path,{method:editingId?"PUT":"POST",body:JSON.stringify({description,amount,category_id,card_id,expense_date})});
-  const normalized={...e,category_name:categories.find(c=>String(c.id)===String(e.category_id))?.name||"",card_name:cards.find(c=>String(c.id)===String(e.card_id))?.name||""};
-  if(editingId)expenses=expenses.map(x=>Number(x.id)===Number(editingId)?normalized:x);else expenses.unshift(normalized);
-  buildPeriods();render();resetForm();showStatus(editingId?"Gasto atualizado com sucesso.":"Gasto salvo com sucesso.","ok");
- }catch(e){showStatus(e.message||"Não foi possível salvar o gasto.")}
-};
-$("baixar").onclick=()=>location.href="export.html";
-$("fPeriodo").onchange=render;$("fCategoria").onchange=render;$("fPagamento").onchange=render;
-async function load(){try{const d=await api("/bootstrap");categories=d.categories||[];cards=d.cards||[];expenses=d.expenses||[];fillSelects();buildPeriods();render()}catch(e){showStatus("Não foi possível carregar os dados do Neon.")}}
-load();
+$("salvar").onclick=async()=>{const description=$("descricao").value.trim(),amount=Number($("valor").value),category_id=$("categoria").value||null,expense_date=$("data").value;if(!description||!amount||amount<=0||!expense_date){alert("Preencha descrição, valor e data.");return}try{let card_id=$("pagamento").value||null;const newPayment=$("novoPagamento").value.trim();if(newPayment){const c=await api("/cards",{method:"POST",body:JSON.stringify({name:newPayment})});if(!cards.some(x=>String(x.id)===String(c.id)))cards.push(c);fillSelects();card_id=c.id}const path=editingId?"/expenses/"+editingId:"/expenses";const e=await api(path,{method:editingId?"PUT":"POST",body:JSON.stringify({description,amount,category_id,card_id,expense_date})});const normalized={...e,category_name:categories.find(c=>String(c.id)===String(e.category_id))?.name||"",card_name:cards.find(c=>String(c.id)===String(e.card_id))?.name||""};if(editingId)expenses=expenses.map(x=>Number(x.id)===Number(editingId)?normalized:x);else expenses.unshift(normalized);const wasEditing=!!editingId;buildPeriods();render();resetForm();showStatus(wasEditing?"Gasto atualizado com sucesso.":"Gasto salvo com sucesso.","ok")}catch(e){showStatus(e.message||"Não foi possível salvar o gasto.")}};
+$("baixar").onclick=()=>location.href="export.html";$("fPeriodo").onchange=render;$("fCategoria").onchange=render;$("fPagamento").onchange=render;
+async function load(){try{const d=await api("/bootstrap");categories=d.categories||[];cards=d.cards||[];expenses=d.expenses||[];fillSelects();buildPeriods();render()}catch(e){showStatus("Não foi possível carregar os dados do Neon.")}}load();
 </script>
 </body></html>

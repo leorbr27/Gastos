@@ -28,7 +28,8 @@ create table if not exists expenses (
   installment_number smallint check (installment_number is null or installment_number > 0),
   invoice_month date,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  owner_id text
 );
 
 create index if not exists expenses_date_idx on expenses(expense_date desc);

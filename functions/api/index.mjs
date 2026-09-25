@@ -1,8 +1,13 @@
 import pg from "pg";
+import { attachDatabasePool } from "@neon/functions";
 const { Pool } = pg;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5, idleTimeoutMillis: 30000 });
+attachDatabasePool(pool);
 
+let schemaReady;
 async function ensureSchema() {
+  if(schemaReady) return schemaReady;
+  schemaReady=(async()=>{
   await pool.query(`
     create table if not exists categories (
       id bigint generated always as identity primary key,
@@ -44,6 +49,9 @@ async function ensureSchema() {
       ('Pix'),('Dinheiro'),('Cartão de débito'),('Cartão de crédito')
     on conflict(name) do nothing;
   `);
+  })();
+  try { await schemaReady; } catch(e) { schemaReady=null; throw e; }
+  return schemaReady;
 }
 
 const ALLOWED_ORIGIN = "https://leorbr27.github.io";
@@ -75,7 +83,7 @@ export default async function handler(request) {
   try {
     await ensureSchema();
 
-    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.25.2",schema_version:1},200,origin);
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.25.3",schema_version:1},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards,expenses]=await Promise.all([

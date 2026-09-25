@@ -42,6 +42,8 @@ async function ensureSchema() {
       updated_at timestamptz not null default now(),
       owner_id text
     );
+    alter table expenses add column if not exists owner_id text;
+    create index if not exists expenses_owner_date_idx on expenses(owner_id,expense_date desc);
     create index if not exists expenses_date_idx on expenses(expense_date desc);
     create index if not exists expenses_category_idx on expenses(category_id);
     create index if not exists expenses_card_idx on expenses(card_id);
@@ -94,8 +96,10 @@ export default async function handler(request) {
   const path=url.pathname.replace(/\/+$/,"")||"/";
   try {
     await ensureSchema();
-    const userId=await requireUser(request);
+    const userId=path==="/auth-config"?null:await requireUser(request);
     await pool.query("update expenses set owner_id=$1 where owner_id is null",[userId]);
+
+    if(request.method==="GET" && path==="/auth-config") return json({auth_url:AUTH_BASE},200,origin);
 
     if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.25.5",schema_version:2,auth:true,pagination:true},200,origin);
 

@@ -58,7 +58,7 @@ $("salvar").onclick=async()=>{const description=$("descricao").value.trim(),amou
 $("baixar").onclick=()=>{location.href="export.html"};
 $("fPeriodo").onchange=render;$("fCategoria").onchange=render;$("fPagamento").onchange=render;function normalizeBootstrap(raw){const d=raw?.data&&typeof raw.data==="object"&&!Array.isArray(raw.data)?raw.data:raw;const normList=v=>{if(Array.isArray(v))return v;if(v&&typeof v==="object")return Object.entries(v).map(([id,x])=>typeof x==="object"?{id,...x}:{id,name:String(x)});return[]};const normExpenses=v=>normList(v).map(x=>x.expense&&typeof x.expense==="object"?{...x.expense}:x);return{categories:normList(d?.categories??raw?.categories),cards:normList(d?.cards??raw?.cards),expenses:normExpenses(d?.expenses??raw?.expenses)}}async function load(){let raw,d;try{raw=await api("/bootstrap");d=normalizeBootstrap(raw)}catch(e){console.error("Falha ao consultar o Neon:",e);showStatus("Erro ao carregar o Neon: "+(e?.message||e));return}try{categories=d.categories;cards=d.cards;expenses=d.expenses;fillSelects();buildPeriods();render()}catch(e){console.error("Falha ao renderizar a página:",e);showStatus("Erro na interface: "+(e?.message||e))}}load();
 </script>
-<div class="last-update" aria-label="Última atualização"><span id="lastUpdate">Última atualização: carregando...</span></div>
+<div class="last-update" aria-label="Última atualização"><span id="lastUpdate">Versão 2026.09.25.2 · código: carregando...</span></div>
 <script>
 (async()=>{
   const el=document.getElementById("lastUpdate");
@@ -71,7 +71,7 @@ $("fPeriodo").onchange=render;$("fCategoria").onchange=render;$("fPagamento").on
     const date=new Date(iso);
     const parts=new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false}).formatToParts(date);
     const get=t=>parts.find(p=>p.type===t)?.value||"";
-    el.textContent="Última atualização: "+get("day")+"/"+get("month")+"/"+get("year")+", "+get("hour")+":"+get("minute");
+    el.textContent="Versão 2026.09.25.2 · código: "+get("day")+"/"+get("month")+"/"+get("year")+", "+get("hour")+":"+get("minute");
   }catch(e){
     console.error("Não foi possível obter o último commit do GitHub:",e);
     el.textContent="Última atualização: indisponível";

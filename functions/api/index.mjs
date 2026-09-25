@@ -58,7 +58,7 @@ const text = (v,max=200) => String(v ?? "").trim().slice(0,max);
 const idOf = v => Number.isInteger(Number(v)) && Number(v)>0 ? Number(v) : null;
 
 async function expenseQuery(where="", params=[]) {
-  const r=await pool.query(`select e.id,e.description,e.amount,e.expense_date,e.category_id,c.name category_name,
+  const r=await pool.query(`select e.id,e.description,e.amount,e.expense_date,e.created_at,e.updated_at,e.category_id,c.name category_name,
     e.card_id,ca.name card_name,e.installment_total,e.installment_number,e.invoice_month
     from expenses e
     left join categories c on c.id=e.category_id
@@ -74,6 +74,8 @@ export default async function handler(request) {
   const path=url.pathname.replace(/\/+$/,"")||"/";
   try {
     await ensureSchema();
+
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.25.2",schema_version:1},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards,expenses]=await Promise.all([
@@ -95,6 +97,13 @@ export default async function handler(request) {
       return json({expenses:await expenseQuery(where.length?"where "+where.join(" and "):"",params)},200,origin);
     }
 
+    if(request.method==="POST" && path.endsWith("/categories")) {
+      const b=await request.json().catch(()=>null), name=text(b?.name,100);
+      if(!name) return json({error:"Nome da categoria é obrigatório."},400,origin);
+      const r=await pool.query(`insert into categories(name) values($1) on conflict(name) do update set active=true returning id,name`,[name]);
+      return json(r.rows[0],201,origin);
+    }
+
     if(request.method==="POST" && path.endsWith("/cards")) {
       const b=await request.json().catch(()=>null), name=text(b?.name,100);
       if(!name) return json({error:"Nome do meio de pagamento é obrigatório."},400,origin);
@@ -111,7 +120,7 @@ export default async function handler(request) {
       if(!description || !Number.isFinite(amount) || amount<=0 || !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate))
         return json({error:"Descrição, valor e data válidos são obrigatórios."},400,origin);
       const r=await pool.query(`update expenses set description=$1,amount=$2,category_id=$3,card_id=$4,expense_date=$5,updated_at=now()
-        where id=$6 returning id,description,amount,category_id,card_id,expense_date`,
+        where id=$6 returning id,description,amount,category_id,card_id,expense_date,created_at,updated_at`,
         [description,Math.round(amount*100)/100,categoryId,cardId,expenseDate,expenseId]);
       if(!r.rowCount) return json({error:"Gasto não encontrado."},404,origin);
       const rows=await expenseQuery("where e.id=$1",[expenseId]);
@@ -132,7 +141,7 @@ export default async function handler(request) {
       if(!description || !Number.isFinite(amount) || amount<=0 || !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate))
         return json({error:"Descrição, valor e data válidos são obrigatórios."},400,origin);
       const r=await pool.query(`insert into expenses(description,amount,category_id,card_id,expense_date)
-        values($1,$2,$3,$4,$5) returning id,description,amount,category_id,card_id,expense_date`,
+        values($1,$2,$3,$4,$5) returning id,description,amount,category_id,card_id,expense_date,created_at,updated_at`,
         [description,Math.round(amount*100)/100,categoryId,cardId,expenseDate]);
       const rows=await expenseQuery("where e.id=$1",[r.rows[0].id]);
       return json(rows[0],201,origin);

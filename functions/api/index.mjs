@@ -4,7 +4,8 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 const { Pool } = pg;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5, idleTimeoutMillis: 30000 });
 const AUTH_BASE=String(process.env.NEON_AUTH_BASE_URL||"").replace(/\/$/,"");
-const JWKS=AUTH_BASE ? createRemoteJWKSet(new URL(AUTH_BASE+"/jwks")) : null;
+const JWKS_URL=String(process.env.NEON_AUTH_JWKS_URL||"").trim() || (AUTH_BASE ? AUTH_BASE+"/.well-known/jwks.json" : "");
+const JWKS=JWKS_URL ? createRemoteJWKSet(new URL(JWKS_URL)) : null;
 attachDatabasePool(pool);
 
 let schemaReady;
@@ -64,7 +65,7 @@ const ALLOWED_ORIGIN = "https://leorbr27.github.io";
 const headers = (origin) => ({
   "Access-Control-Allow-Origin": origin === ALLOWED_ORIGIN ? origin : "null",
   "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
   "Content-Type": "application/json; charset=utf-8"
 });
 const json = (data,status,origin) => new Response(JSON.stringify(data),{status,headers:headers(origin)});

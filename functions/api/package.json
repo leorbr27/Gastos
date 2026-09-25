@@ -1,1 +1,1 @@
-{"name":"gastos-api","private":true,"type":"module","dependencies":{"pg":"^8.16.3","@neon/functions":"^0.8.0"}}
+{"name":"gastos-api","private":true,"type":"module","dependencies":{"pg":"^8.16.3","@neon/functions":"^0.8.0","jose":"^6.1.0"}}

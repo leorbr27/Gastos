@@ -1,0 +1,4 @@
+.env.local
+.neon/
+node_modules/
+.DS_Store

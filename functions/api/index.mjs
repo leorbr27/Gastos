@@ -119,7 +119,7 @@ export default async function handler(request) {
       if(start && /^\d{4}-\d{2}-\d{2}$/.test(start)){params.push(start);where.push(`e.expense_date >= $${params.length}`)}
       if(end && /^\d{4}-\d{2}-\d{2}$/.test(end)){params.push(end);where.push(`e.expense_date <= $${params.length}`)}
       if(category){params.push(category);where.push(`e.category_id = $${params.length}`)}
-      if(card){params.push(card);where.push(`e.card_id = ${params.length}`)}
+      if(card){params.push(card);where.push("e.card_id = $"+params.length)}
       const limit=Math.min(100,Math.max(1,Number(url.searchParams.get("limit")||50)||50));
       const offset=Math.max(0,Number(url.searchParams.get("offset")||0)||0);
       const count=await pool.query(`select count(*)::int total from expenses e where ${where.join(" and ")}`,params);

@@ -29,9 +29,11 @@ create table if not exists expenses (
   invoice_month date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  owner_id text,
   owner_id text
 );
 
+create index if not exists expenses_owner_date_idx on expenses(owner_id, expense_date desc);
 create index if not exists expenses_date_idx on expenses(expense_date desc);
 create index if not exists expenses_category_idx on expenses(category_id);
 create index if not exists expenses_card_idx on expenses(card_id);

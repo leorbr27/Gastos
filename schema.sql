@@ -42,3 +42,8 @@ insert into categories (name) values
   ('Lazer'), ('Compras'), ('Educação'), ('Assinaturas'),
   ('Trabalho'), ('Outros')
 on conflict (name) do nothing;
+
+
+insert into cards (name) values
+  ('Pix'), ('Dinheiro'), ('Cartão de débito'), ('Cartão de crédito')
+on conflict (name) do nothing;

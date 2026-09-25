@@ -1,0 +1,8 @@
+{
+  "name": "gastos",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@neondatabase/config": "^1.7.3"
+  }
+}

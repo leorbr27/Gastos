@@ -29,7 +29,6 @@ create table if not exists expenses (
   invoice_month date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  owner_id text,
   owner_id text
 );
 

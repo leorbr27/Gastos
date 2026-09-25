@@ -56,7 +56,7 @@ async function ensureSchema() {
 
 const ALLOWED_ORIGIN = "https://leorbr27.github.io";
 const headers = (origin) => ({
-  "Access-Control-Allow-Origin": origin === ALLOWED_ORIGIN ? origin : ALLOWED_ORIGIN,
+  "Access-Control-Allow-Origin": origin === ALLOWED_ORIGIN ? origin : "null",
   "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
   "Content-Type": "application/json; charset=utf-8"
@@ -77,13 +77,14 @@ async function expenseQuery(where="", params=[]) {
 
 export default async function handler(request) {
   const origin=request.headers.get("origin")||"";
-  if(request.method==="OPTIONS") return new Response(null,{status:204,headers:headers(origin)});
+  if(request.method==="OPTIONS") return origin===ALLOWED_ORIGIN ? new Response(null,{status:204,headers:headers(origin)}) : new Response(null,{status:403,headers:headers(origin)});
+  if(origin!==ALLOWED_ORIGIN) return json({error:"Origem não autorizada."},403,origin);
   const url=new URL(request.url);
   const path=url.pathname.replace(/\/+$/,"")||"/";
   try {
     await ensureSchema();
 
-    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.25.3",schema_version:1},200,origin);
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.25.4",schema_version:1},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards,expenses]=await Promise.all([
@@ -120,7 +121,7 @@ export default async function handler(request) {
       return json(r.rows[0],201,origin);
     }
 
-    if((request.method==="POST" || request.method==="PUT") && /\/expenses\/?\d+$/.test(path)) {
+    if(request.method==="PUT" && /\/expenses\/?\d+$/.test(path)) {
       const match=path.match(/(\d+)$/), expenseId=Number(match[1]);
       const b=await request.json().catch(()=>null);
       const description=text(b?.description,200), amount=Number(b?.amount);

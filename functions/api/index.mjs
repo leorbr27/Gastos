@@ -97,8 +97,11 @@ export default async function handler(request) {
   const path=url.pathname.replace(/\/+$/,"")||"/";
   try {
     await ensureSchema();
-    const userId=path==="/auth-config"?null:await requireUser(request);
-    await pool.query("update expenses set owner_id=$1 where owner_id is null",[userId]);
+    const isPublicBootstrap=request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"));
+    const isPublicCreateExpense=request.method==="POST" && path.endsWith("/expenses");
+    const isPublicCreateCard=request.method==="POST" && path.endsWith("/cards");
+    const userId=(path==="/auth-config" || isPublicBootstrap || isPublicCreateExpense || isPublicCreateCard)?null:await requireUser(request);
+    if(userId) await pool.query("update expenses set owner_id=$1 where owner_id is null",[userId]);
 
     if(request.method==="GET" && path==="/auth-config") return json({auth_url:AUTH_BASE},200,origin);
 
@@ -113,7 +116,7 @@ export default async function handler(request) {
     }
 
     if(request.method==="GET" && path.endsWith("/expenses")) {
-      const params=[userId], where=["e.owner_id = $1"];
+      const params=[userId], where=["(e.owner_id = $1 or e.owner_id is null)"];
       const start=text(url.searchParams.get("start"),10), end=text(url.searchParams.get("end"),10);
       const category=idOf(url.searchParams.get("category_id")), card=idOf(url.searchParams.get("card_id"));
       if(start && /^\d{4}-\d{2}-\d{2}$/.test(start)){params.push(start);where.push(`e.expense_date >= $${params.length}`)}
@@ -149,16 +152,16 @@ export default async function handler(request) {
       if(!description || !Number.isFinite(amount) || amount<=0 || !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate))
         return json({error:"Descrição, valor e data válidos são obrigatórios."},400,origin);
       const r=await pool.query(`update expenses set description=$1,amount=$2,category_id=$3,card_id=$4,expense_date=$5,updated_at=now()
-        where id=$6 and owner_id=$7 returning id,description,amount,category_id,card_id,expense_date,created_at,updated_at`,
+        where id=$6 and (owner_id=$7 or owner_id is null) returning id,description,amount,category_id,card_id,expense_date,created_at,updated_at`,
         [description,Math.round(amount*100)/100,categoryId,cardId,expenseDate,expenseId,userId]);
       if(!r.rowCount) return json({error:"Gasto não encontrado."},404,origin);
-      const rows=await expenseQuery("where e.id=$1 and e.owner_id=$2",[expenseId,userId]);
+      const rows=await expenseQuery("where e.id=$1 and (e.owner_id=$2 or e.owner_id is null)",[expenseId,userId]);
       return json(rows[0],200,origin);
     }
 
     if(request.method==="DELETE" && /\/expenses\/?\d+$/.test(path)) {
       const match=path.match(/(\d+)$/), expenseId=Number(match[1]);
-      const r=await pool.query("delete from expenses where id=$1 and owner_id=$2 returning id",[expenseId,userId]);
+      const r=await pool.query("delete from expenses where id=$1 and (owner_id=$2 or owner_id is null) returning id",[expenseId,userId]);
       if(!r.rowCount) return json({error:"Gasto não encontrado."},404,origin);
       return new Response(null,{status:204,headers:headers(origin)});
     }

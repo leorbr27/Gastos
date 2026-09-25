@@ -102,7 +102,7 @@ export default async function handler(request) {
 
     if(request.method==="GET" && path==="/auth-config") return json({auth_url:AUTH_BASE},200,origin);
 
-    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.25.5",schema_version:2,auth:true,pagination:true},200,origin);
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.25.6",schema_version:2,auth:true,pagination:true},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards]=await Promise.all([

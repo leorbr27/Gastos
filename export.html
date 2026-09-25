@@ -24,7 +24,7 @@
 <section class="card"><strong>Prévia</strong><div id="preview" class="preview" style="margin-top:8px">Carregando dados...</div></section>
 </div>
 <script>
-const API_BASE="https://br-billowing-river-b43fz1vp-api.compute.c-6.us-east-2.aws.neon.tech";
+const API_BASE="https://br-billowing-river-b43fz1vp-api.compute.c-6.us-east-2.aws.neon.tech/api";
 const $=id=>document.getElementById(id);let categories=[],cards=[],expenses=[];
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 const brl=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});

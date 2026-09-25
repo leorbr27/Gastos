@@ -104,12 +104,11 @@ export default async function handler(request) {
     if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.25.5",schema_version:2,auth:true,pagination:true},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
-      const [categories,cards,expenses]=await Promise.all([
+      const [categories,cards]=await Promise.all([
         pool.query("select id,name from categories where active=true order by name"),
         pool.query("select id,name,closing_day,due_day from cards where active=true order by case when name='Pix' then 0 when name='Dinheiro' then 1 else 2 end,name"),
-        expenseQuery("where e.owner_id=$1",[userId])
       ]);
-      return json({categories:categories.rows,cards:cards.rows,expenses},200,origin);
+      return json({categories:categories.rows,cards:cards.rows},200,origin);
     }
 
     if(request.method==="GET" && path.endsWith("/expenses")) {

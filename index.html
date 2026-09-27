@@ -88,44 +88,6 @@ $("fPeriodo").onchange=render;$("fCategoria").onchange=render;$("fPagamento").on
     setAuthUI(logged);
   }catch(e){console.error("Falha ao consultar o Neon:",e);if(e?.message==="LOGIN_REQUIRED"){setAuthUI(false);showStatus("Entre para consultar, editar ou excluir os gastos já cadastrados.");return}showStatus("Erro ao carregar o Neon: "+(e?.message||e));return}try{categories=d.categories;cards=d.cards;expenses=d.expenses;fillSelects();buildPeriods();if(logged){render()}else{$("total").textContent="R$ 0,00";$("quantidade").textContent="—";$("chartCategoria").innerHTML='<div class="empty">Login necessário para consultar</div>';$("chartPagamento").innerHTML='<div class="empty">Login necessário para consultar</div>';$("legendCategoria").innerHTML="";$("legendPagamento").innerHTML="";$("lista").innerHTML='<div class="empty">Os lançamentos já cadastrados ficam disponíveis após o login.</div>'} }catch(e){console.error("Falha ao renderizar a página:",e);showStatus("Erro na interface: "+(e?.message||e))}}load();
 
-const barcodeModal=$("barcodeModal"),barcodeVideo=$("barcodeVideo"),barcodeStatus=$("barcodeStatus"),barcodeManual=$("barcodeManual");
-let barcodeStream=null,barcodeTimer=null,barcodeControls=null;
-function closeBarcode(){
-  if(barcodeTimer)clearInterval(barcodeTimer); barcodeTimer=null;
-  try{barcodeControls?.stop?.()}catch(e){} barcodeControls=null;
-  if(barcodeStream){barcodeStream.getTracks().forEach(t=>t.stop());barcodeStream=null}
-  barcodeVideo.srcObject=null; barcodeModal.classList.remove("show");
-}
-function useBarcode(value){
-  const code=String(value||"").trim(); if(!code)return;
-  $("descricao").value=code; closeBarcode(); $("descricao").focus(); showStatus("Código de barras lido: "+code,"ok");
-}
-async function startBarcode(){
-  barcodeModal.classList.add("show"); barcodeStatus.textContent="Iniciando câmera…"; barcodeManual.value="";
-  try{
-    barcodeStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
-    barcodeVideo.srcObject=barcodeStream; await barcodeVideo.play();
-    if("BarcodeDetector" in window){
-      const detector=new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39","code_93","itf","codabar","qr_code"]});
-      barcodeStatus.textContent="Aponte a câmera para o código.";
-      barcodeTimer=setInterval(async()=>{try{const found=await detector.detect(barcodeVideo);if(found?.[0]?.rawValue)useBarcode(found[0].rawValue)}catch(e){}},250);
-    }else{
-      const mod=await import("https://esm.sh/@zxing/browser@0.1.5");
-      const reader=new mod.BrowserMultiFormatReader();
-      barcodeStatus.textContent="Aponte a câmera para o código.";
-      barcodeControls=await reader.decodeFromVideoDevice(undefined,barcodeVideo,(result)=>{if(result?.getText)useBarcode(result.getText())});
-    }
-  }catch(e){
-    barcodeStatus.textContent="Não foi possível acessar a câmera. Você pode digitar o código abaixo.";
-    if(barcodeStream){barcodeStream.getTracks().forEach(t=>t.stop());barcodeStream=null}
-  }
-}
-$("dividirConta").onclick=()=>{location.href="dividir_conta/index.html"};
-$("lerCodigo").onclick=startBarcode;
-$("barcodeClose").onclick=closeBarcode;
-$("barcodeUse").onclick=()=>useBarcode(barcodeManual.value);
-barcodeManual.onkeydown=e=>{if(e.key==="Enter")useBarcode(barcodeManual.value)};
-barcodeModal.addEventListener("click",e=>{if(e.target===barcodeModal)closeBarcode()});
 </script>
 <div class="last-update" aria-label="Última atualização"><span id="lastUpdate">Versão 2026.09.25.6 · código: carregando...</span></div>
 <script>

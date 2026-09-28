@@ -154,7 +154,7 @@ export default async function handler(request) {
       if(!description || !Number.isFinite(amount) || amount<=0 || !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate))
         return json({error:"Descrição, valor e data válidos são obrigatórios."},400,origin);
       const r=await pool.query(`update expenses set description=$1,amount=$2,category_id=$3,card_id=$4,expense_date=$5,observation=$6,updated_at=now()
-        where id=$7 and (owner_id=$7 or owner_id is null) returning id,description,amount,category_id,card_id,expense_date,observation,created_at,updated_at`,
+        where id=$7 and (owner_id=$8 or owner_id is null) returning id,description,amount,category_id,card_id,expense_date,observation,created_at,updated_at`,
         [description,Math.round(amount*100)/100,categoryId,cardId,expenseDate,observation,expenseId,userId]);
       if(!r.rowCount) return json({error:"Gasto não encontrado."},404,origin);
       const rows=await expenseQuery("where e.id=$1 and (e.owner_id=$2 or e.owner_id is null)",[expenseId,userId]);
@@ -170,12 +170,12 @@ export default async function handler(request) {
 
     if(request.method==="POST" && path.endsWith("/expenses")) {
       const b=await request.json().catch(()=>null);
-      const description=text(b?.description,200), amount=Number(b?.amount);
+      const description=text(b?.description,200), amount=Number(b?.amount), observation=text(b?.observation,500);
       const categoryId=idOf(b?.category_id), cardId=idOf(b?.card_id), expenseDate=text(b?.expense_date,10);
       if(!description || !Number.isFinite(amount) || amount<=0 || !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate))
         return json({error:"Descrição, valor e data válidos são obrigatórios."},400,origin);
       const r=await pool.query(`insert into expenses(description,amount,category_id,card_id,expense_date,observation,owner_id)
-        values($1,$2,$3,$4,$5,$6,$7) returning id,description,amount,category_id,card_id,expense_date,created_at,updated_at`,
+        values($1,$2,$3,$4,$5,$6,$7) returning id,description,amount,category_id,card_id,expense_date,observation,created_at,updated_at`,
         [description,Math.round(amount*100)/100,categoryId,cardId,expenseDate,observation,userId]);
       const rows=await expenseQuery("where e.id=$1 and e.owner_id=$2",[r.rows[0].id,userId]);
       return json(rows[0],201,origin);

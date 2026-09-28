@@ -26,6 +26,7 @@ create table if not exists expenses (
   expense_date date not null default current_date,
   installment_total smallint check (installment_total is null or installment_total > 0),
   installment_number smallint check (installment_number is null or installment_number > 0),
+  observation text,
   invoice_month date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -40,7 +41,7 @@ create index if not exists expenses_card_idx on expenses(card_id);
 insert into categories (name) values
   ('Alimentação'), ('Transporte'), ('Contas da casa'), ('Saúde'),
   ('Lazer'), ('Compras'), ('Educação'), ('Assinaturas'),
-  ('Trabalho'), ('Outros')
+  ('Trabalho'), ('Outros'), ('Lanches')
 on conflict (name) do nothing;
 
 

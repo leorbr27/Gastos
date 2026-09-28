@@ -38,19 +38,21 @@ async function ensureSchema() {
       expense_date date not null default current_date,
       installment_total smallint check (installment_total is null or installment_total > 0),
       installment_number smallint check (installment_number is null or installment_number > 0),
+      observation text,
       invoice_month date,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now(),
       owner_id text
     );
     alter table expenses add column if not exists owner_id text;
+    alter table expenses add column if not exists observation text;
     create index if not exists expenses_owner_date_idx on expenses(owner_id,expense_date desc);
     create index if not exists expenses_date_idx on expenses(expense_date desc);
     create index if not exists expenses_category_idx on expenses(category_id);
     create index if not exists expenses_card_idx on expenses(card_id);
     insert into categories(name) values
       ('Alimentação'),('Transporte'),('Contas da casa'),('Saúde'),('Lazer'),
-      ('Compras'),('Educação'),('Assinaturas'),('Trabalho'),('Outros')
+      ('Compras'),('Educação'),('Assinaturas'),('Trabalho'),('Outros'),('Lanches')
     on conflict(name) do nothing;
     insert into cards(name) values
       ('Pix'),('Dinheiro'),('Cartão de débito'),('Cartão de crédito')
@@ -80,7 +82,7 @@ async function requireUser(request){
 }
 
 async function expenseQuery(where="", params=[], limit=null, offset=0) {
-  const r=await pool.query(`select e.id,e.description,e.amount,e.expense_date,e.created_at,e.updated_at,e.category_id,c.name category_name,
+  const r=await pool.query(`select e.id,e.description,e.amount,e.expense_date,e.created_at,e.updated_at,e.observation,e.category_id,c.name category_name,
     e.card_id,ca.name card_name,e.installment_total,e.installment_number,e.invoice_month
     from expenses e
     left join categories c on c.id=e.category_id
@@ -105,7 +107,7 @@ export default async function handler(request) {
 
     if(request.method==="GET" && path==="/auth-config") return json({auth_url:AUTH_BASE},200,origin);
 
-    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.25.6",schema_version:2,auth:true,pagination:true},200,origin);
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.28.1",schema_version:3,auth:true,pagination:true},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards]=await Promise.all([
@@ -147,13 +149,13 @@ export default async function handler(request) {
     if(request.method==="PUT" && /\/expenses\/?\d+$/.test(path)) {
       const match=path.match(/(\d+)$/), expenseId=Number(match[1]);
       const b=await request.json().catch(()=>null);
-      const description=text(b?.description,200), amount=Number(b?.amount);
+      const description=text(b?.description,200), amount=Number(b?.amount), observation=text(b?.observation,500);
       const categoryId=idOf(b?.category_id), cardId=idOf(b?.card_id), expenseDate=text(b?.expense_date,10);
       if(!description || !Number.isFinite(amount) || amount<=0 || !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate))
         return json({error:"Descrição, valor e data válidos são obrigatórios."},400,origin);
-      const r=await pool.query(`update expenses set description=$1,amount=$2,category_id=$3,card_id=$4,expense_date=$5,updated_at=now()
-        where id=$6 and (owner_id=$7 or owner_id is null) returning id,description,amount,category_id,card_id,expense_date,created_at,updated_at`,
-        [description,Math.round(amount*100)/100,categoryId,cardId,expenseDate,expenseId,userId]);
+      const r=await pool.query(`update expenses set description=$1,amount=$2,category_id=$3,card_id=$4,expense_date=$5,observation=$6,updated_at=now()
+        where id=$7 and (owner_id=$7 or owner_id is null) returning id,description,amount,category_id,card_id,expense_date,observation,created_at,updated_at`,
+        [description,Math.round(amount*100)/100,categoryId,cardId,expenseDate,observation,expenseId,userId]);
       if(!r.rowCount) return json({error:"Gasto não encontrado."},404,origin);
       const rows=await expenseQuery("where e.id=$1 and (e.owner_id=$2 or e.owner_id is null)",[expenseId,userId]);
       return json(rows[0],200,origin);
@@ -172,9 +174,9 @@ export default async function handler(request) {
       const categoryId=idOf(b?.category_id), cardId=idOf(b?.card_id), expenseDate=text(b?.expense_date,10);
       if(!description || !Number.isFinite(amount) || amount<=0 || !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate))
         return json({error:"Descrição, valor e data válidos são obrigatórios."},400,origin);
-      const r=await pool.query(`insert into expenses(description,amount,category_id,card_id,expense_date,owner_id)
-        values($1,$2,$3,$4,$5,$6) returning id,description,amount,category_id,card_id,expense_date,created_at,updated_at`,
-        [description,Math.round(amount*100)/100,categoryId,cardId,expenseDate,userId]);
+      const r=await pool.query(`insert into expenses(description,amount,category_id,card_id,expense_date,observation,owner_id)
+        values($1,$2,$3,$4,$5,$6,$7) returning id,description,amount,category_id,card_id,expense_date,created_at,updated_at`,
+        [description,Math.round(amount*100)/100,categoryId,cardId,expenseDate,observation,userId]);
       const rows=await expenseQuery("where e.id=$1 and e.owner_id=$2",[r.rows[0].id,userId]);
       return json(rows[0],201,origin);
     }

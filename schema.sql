@@ -12,6 +12,7 @@ create table if not exists cards (
   active boolean not null default true,
   closing_day smallint,
   due_day smallint,
+  credit_limit numeric(12,2) not null default 0,
   created_at timestamptz not null default now(),
   constraint cards_closing_day_chk check (closing_day is null or closing_day between 1 and 31),
   constraint cards_due_day_chk check (due_day is null or due_day between 1 and 31)
@@ -63,6 +64,7 @@ create table if not exists receipts (
 
 create index if not exists receivables_owner_date_idx on receivables(owner_id,due_date desc);
 create index if not exists receipts_receivable_idx on receipts(receivable_id);
+create index if not exists receipts_account_idx on receipts(account_id);
 
 create table if not exists financial_accounts (
   id bigint generated always as identity primary key,

@@ -386,7 +386,7 @@ export default async function handler(request) {
         (date_trunc('month',$1::date)+make_interval(days=>coalesce($2,1)-1))::date period_end,
         (date_trunc('month',$1::date)+make_interval(days=>case when coalesce($3,1)<=coalesce($2,1) then 1 else 0 end months)+make_interval(days=>coalesce($3,1)-1))::date due_date`,[start,c.closing_day,c.due_day]);
       const p=period.rows[0];
-      const expensesRows=await pool.query("select id,description,amount,expense_date,installment_total,installment_number from expenses where card_id=$1 and invoice_month=$2 and (invoice_month<>$2 or expense_date<=current_date) order by expense_date,id",[cardId,start]);
+      const expensesRows=await pool.query("select id,description,amount,expense_date,installment_total,installment_number from expenses where card_id=$1 and invoice_month=$2 and (expense_date<=current_date or invoice_month>(date_trunc('month',current_date)+case when extract(day from current_date)>coalesce((select closing_day from cards where id=$1),31) then interval '1 month' else interval '0 month' end)::date) order by expense_date,id",[cardId,start]);
       const account=await pool.query("select id from financial_accounts where card_id=$1 and account_type='credit_card' and active=true limit 1",[cardId]);
       let paid=0;
       if(account.rowCount) {

@@ -99,7 +99,6 @@ async function ensureSchema() {
       constraint transfer_accounts_chk check (source_account_id <> destination_account_id)
     );
     alter table receipts add column if not exists account_id bigint references financial_accounts(id) on delete set null;
-        alter table receipts add column if not exists account_id bigint references financial_accounts(id) on delete set null;
     create index if not exists receipts_account_idx on receipts(account_id);
     create index if not exists accounts_owner_idx on financial_accounts(owner_id,active);
     create index if not exists transfers_owner_date_idx on transfers(owner_id,transfer_date desc);
@@ -137,7 +136,7 @@ async function ensureSchema() {
     create index if not exists recurring_owner_next_idx on recurring_rules(owner_id,next_date,active);
     insert into categories(name) values
       ('Alimentação'),('Carro'),('Contas da casa'),('Saúde'),('Lazer'),
-      ('Alimentação'),('Transporte'),('Contas da casa'),('Saúde'),('Lazer'),
+      ('Transporte'),
       ('Compras'),('Educação'),('Assinaturas'),('Trabalho'),('Outros'),('Lanches'),
       ('Empréstimos feitos'),('Empréstimos tomados'),('Impostos e taxas'),('Moto'),('Transporte por aplicativo')
     on conflict(name) do nothing;
@@ -192,14 +191,12 @@ export default async function handler(request) {
   try {
     await ensureSchema();
     const isPublicBootstrap=request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"));
-    const isPublicCreateExpense=request.method==="POST" && path.endsWith("/expenses");
-    const isPublicCreateCard=request.method==="POST" && path.endsWith("/cards");
-    const userId=(path==="/auth-config" || isPublicBootstrap || isPublicCreateExpense || isPublicCreateCard || (request.method==="POST" && path.endsWith("/receivables")))?null:await requireUser(request);
+    const userId=(path==="/auth-config" || isPublicBootstrap)?null:await requireUser(request);
     if(userId) await pool.query("update expenses set owner_id=$1 where owner_id is null",[userId]);
 
     if(request.method==="GET" && path==="/auth-config") return json({auth_url:AUTH_BASE},200,origin);
 
-    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.8",schema_version:10,auth:true,pagination:true,receivables:true,partial_receipts:true,accounts:true,transfers:true,reconciliation_manual:true},200,origin);
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.8",schema_version:10,auth:true,pagination:true,receivables:true,partial_receipts:true,accounts:true,transfers:true,reconciliation_manual:true,auth_required_for_writes:true},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards]=await Promise.all([

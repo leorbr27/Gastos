@@ -141,8 +141,8 @@ async function ensureSchema() {
       ('Empréstimos feitos'),('Empréstimos tomados'),('Impostos e taxas'),('Moto'),('Transporte por aplicativo')
     on conflict(name) do nothing;
 
-    await pool.query(`update expenses set category_id=(select id from categories where name='Carro' limit 1) where category_id=(select id from categories where name='Transporte' limit 1);`);
-    await pool.query(`update categories set active=false where name='Transporte';`);
+    update expenses set category_id=(select id from categories where name='Carro' limit 1) where category_id=(select id from categories where name='Transporte' limit 1);
+    update categories set active=false where name='Transporte';
     update expenses e set invoice_month=(date_trunc('month',e.expense_date)+case when extract(day from e.expense_date)>coalesce(c.closing_day,31) then interval '1 month' else interval '0 month' end)::date
       from cards c where c.id=e.card_id and e.invoice_month is null;
     insert into cards(name) values

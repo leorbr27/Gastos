@@ -39,10 +39,11 @@ create index if not exists expenses_category_idx on expenses(category_id);
 create index if not exists expenses_card_idx on expenses(card_id);
 
 insert into categories (name) values
-  ('Alimentação'), ('Transporte'), ('Contas da casa'), ('Saúde'),
+  ('Alimentação'), ('Carro'), ('Contas da casa'), ('Saúde'),
   ('Lazer'), ('Compras'), ('Educação'), ('Assinaturas'),
   ('Trabalho'), ('Outros'), ('Lanches'), ('Empréstimos feitos'),
-  ('Empréstimos tomados'), ('Impostos e taxas')
+  ('Empréstimos tomados'), ('Impostos e taxas'), ('Moto'),
+  ('Transporte por aplicativo')
 on conflict (name) do nothing;
 
 

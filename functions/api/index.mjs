@@ -67,7 +67,6 @@ async function ensureSchema() {
     alter table receivables add column if not exists installment_group text;
     alter table receivables add column if not exists installment_total smallint not null default 1;
     alter table receivables add column if not exists installment_number smallint not null default 1;
-    alter table receivables add column if not exists account_id bigint references financial_accounts(id) on delete set null;
     create table if not exists receipts (
       id bigint generated always as identity primary key,
       receivable_id bigint not null references receivables(id) on delete cascade,
@@ -91,6 +90,7 @@ async function ensureSchema() {
       created_at timestamptz not null default now(),
       owner_id text
     );
+    alter table receivables add column if not exists account_id bigint references financial_accounts(id) on delete set null;
     create table if not exists transfers (
       id bigint generated always as identity primary key,
       source_account_id bigint not null references financial_accounts(id) on delete restrict,
@@ -256,7 +256,7 @@ export default async function handler(request) {
       return json({created},201,origin);
     }
 
-    if(request.method==="PUT" && /^\\/receivables\\/\\d+$/.test(path)) {
+    if(request.method==="PUT" && /^\/receivables\/\d+$/.test(path)) {
       const id=Number(path.match(/(\\d+)$/)[1]),b=await request.json().catch(()=>null);
       const description=text(b?.description,200),expected=Number(b?.expected_amount),due=text(b?.due_date,10),category=text(b?.category,100)||"Outros",method=text(b?.receiving_method,100),observation=text(b?.observation,500),accountId=idOf(b?.account_id),applyAll=!!b?.apply_to_installments;
       if(!description||!Number.isFinite(expected)||expected<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(due))return json({error:"Descrição, valor e data prevista válidos são obrigatórios."},400,origin);

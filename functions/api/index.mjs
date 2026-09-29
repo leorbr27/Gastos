@@ -57,8 +57,8 @@ async function ensureSchema() {
       ('Empréstimos feitos'),('Empréstimos tomados'),('Impostos e taxas'),('Moto'),('Transporte por aplicativo')
     on conflict(name) do nothing;
 
-    await client.query(`update expenses set category_id=(select id from categories where name='Carro' limit 1) where category_id=(select id from categories where name='Transporte' limit 1);`);
-    await client.query(`update categories set active=false where name='Transporte';`);
+    await pool.query(`update expenses set category_id=(select id from categories where name='Carro' limit 1) where category_id=(select id from categories where name='Transporte' limit 1);`);
+    await pool.query(`update categories set active=false where name='Transporte';`);
     insert into cards(name) values
       ('Pix'),('Dinheiro'),('Cartão de débito'),('Cartão de crédito')
     on conflict(name) do nothing;
@@ -107,12 +107,12 @@ export default async function handler(request) {
     const isPublicBootstrap=request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"));
     const isPublicCreateExpense=request.method==="POST" && path.endsWith("/expenses");
     const isPublicCreateCard=request.method==="POST" && path.endsWith("/cards");
-    const userId=(path==="/auth-config" || isPublicBootstrap || isPublicCreateExpense || isPublicCreateCard)?null:await requireUser(request);
+    const userId=(path==="/auth-config" || isPublicBootstrap || isPublicCreateExpense || isPublicCreateCard || (request.method==="POST" && (path.endsWith("/receivables") || /\/receivables\/\d+\/receipts$/.test(path))))?null:await requireUser(request);
     if(userId) await pool.query("update expenses set owner_id=$1 where owner_id is null",[userId]);
 
     if(request.method==="GET" && path==="/auth-config") return json({auth_url:AUTH_BASE},200,origin);
 
-    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.28.1",schema_version:3,auth:true,pagination:true},200,origin);
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.2",schema_version:4,auth:true,pagination:true,receivables:true,partial_receipts:true},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards]=await Promise.all([
@@ -120,6 +120,33 @@ export default async function handler(request) {
         pool.query("select id,name,closing_day,due_day from cards where active=true order by case when name='Pix' then 0 when name='Dinheiro' then 1 else 2 end,name"),
       ]);
       return json({categories:categories.rows,cards:cards.rows},200,origin);
+    }
+
+    if(request.method==="GET" && path.endsWith("/receivables")) {
+      const rows=await pool.query(`select r.id,r.description,r.expected_amount,r.due_date,r.category,r.receiving_method,r.observation,r.created_at,r.updated_at,coalesce(sum(p.amount),0)::numeric(12,2) received_amount
+        from receivables r left join receipts p on p.receivable_id=r.id
+        where (r.owner_id=$1 or r.owner_id is null)
+        group by r.id order by r.due_date desc,r.id desc limit ${Math.min(100,Math.max(1,Number(url.searchParams.get("limit")||50)||50))} offset ${Math.max(0,Number(url.searchParams.get("offset")||0)||0)}`,[userId]);
+      return json({receivables:rows.rows},200,origin);
+    }
+
+    if(request.method==="POST" && path.endsWith("/receivables")) {
+      const b=await request.json().catch(()=>null);
+      const description=text(b?.description,200),expected=Number(b?.expected_amount),due=text(b?.due_date,10),category=text(b?.category,100)||"Outros",method=text(b?.receiving_method,100),observation=text(b?.observation,500);
+      if(!description||!Number.isFinite(expected)||expected<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(due))return json({error:"Descrição, valor e data prevista válidos são obrigatórios."},400,origin);
+      const r=await pool.query(`insert into receivables(description,expected_amount,due_date,category,receiving_method,observation,owner_id) values($1,$2,$3,$4,$5,$6,$7) returning id,description,expected_amount,due_date,category,receiving_method,observation,created_at,updated_at`,[description,Math.round(expected*100)/100,due,category,method,observation,userId]);
+      return json({...r.rows[0],received_amount:0},201,origin);
+    }
+
+    if(request.method==="POST" && /\/receivables\/\d+\/receipts$/.test(path)) {
+      const id=Number(path.match(/(\d+)\/receipts$/)[1]),b=await request.json().catch(()=>null),amount=Number(b?.amount),receivedDate=text(b?.received_date,10)||new Date().toISOString().slice(0,10),observation=text(b?.observation,500);
+      if(!Number.isFinite(amount)||amount<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(receivedDate))return json({error:"Valor e data do recebimento são obrigatórios."},400,origin);
+      const owner=await pool.query("select owner_id,expected_amount from receivables where id=$1 and (owner_id=$2 or owner_id is null)",[id,userId]);
+      if(!owner.rowCount)return json({error:"Recebimento não encontrado."},404,origin);
+      const sum=await pool.query("select coalesce(sum(amount),0) total from receipts where receivable_id=$1",[id]);
+      if(Number(sum.rows[0].total)+amount>Number(owner.rows[0].expected_amount)+0.009)return json({error:"O valor recebido não pode ultrapassar o valor previsto."},400,origin);
+      const r=await pool.query("insert into receipts(receivable_id,amount,received_date,observation,owner_id) values($1,$2,$3,$4,$5) returning id,receivable_id,amount,received_date,observation,created_at",[id,Math.round(amount*100)/100,receivedDate,observation,userId]);
+      return json(r.rows[0],201,origin);
     }
 
     if(request.method==="GET" && path.endsWith("/expenses")) {

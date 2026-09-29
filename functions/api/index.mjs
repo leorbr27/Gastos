@@ -196,7 +196,7 @@ export default async function handler(request) {
 
     if(request.method==="GET" && path==="/auth-config") return json({auth_url:AUTH_BASE},200,origin);
 
-    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.8",schema_version:10,auth:true,pagination:true,receivables:true,partial_receipts:true,accounts:true,transfers:true,reconciliation_manual:true,auth_required_for_writes:true},200,origin);
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.9",schema_version:11,auth:true,pagination:true,receivables:true,partial_receipts:true,accounts:true,transfers:true,reconciliation_manual:true,auth_required_for_writes:true},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards]=await Promise.all([

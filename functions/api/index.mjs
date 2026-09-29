@@ -230,7 +230,7 @@ export default async function handler(request) {
 
     if(request.method==="GET" && path.endsWith("/accounts")) {
       const rows=await pool.query(`select a.id,a.name,a.account_type,a.opening_balance,a.card_id,a.created_at,
-        coalesce((select sum(case when t.source_account_id=a.id then -t.amount when t.destination_account_id=a.id then t.amount else 0 end) from transfers t where t.owner_id=$1),0) transfer_net,
+        coalesce((select sum(case when t.source_account_id=a.id then -t.amount when t.destination_account_id=a.id then t.amount else 0 end) from transfers t where t.owner_id=$1 and t.transfer_date<=current_date),0) transfer_net,
         coalesce((select sum(r.amount) from receipts r where r.owner_id=$1 and r.account_id=a.id and r.received_date<=current_date),0) receipt_net,
         coalesce((select sum(e.amount) from expenses e where e.owner_id=$1 and e.card_id=a.card_id and e.expense_date<=current_date),0) card_expenses,
         coalesce((select sum(t.amount) from transfers t where t.owner_id=$1 and t.destination_account_id=a.id and t.transfer_type='credit_card_payment' and t.transfer_date<=current_date),0) card_payments

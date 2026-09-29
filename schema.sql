@@ -64,7 +64,7 @@ create table if not exists receipts (
 
 create index if not exists receivables_owner_date_idx on receivables(owner_id,due_date desc);
 create index if not exists receipts_receivable_idx on receipts(receivable_id);
-create index if not exists receipts_account_idx on receipts(account_id);
+
 
 create table if not exists financial_accounts (
   id bigint generated always as identity primary key,
@@ -94,7 +94,25 @@ create table if not exists transfers (
 create index if not exists accounts_owner_idx on financial_accounts(owner_id,active);
 
 alter table receipts add column if not exists account_id bigint references financial_accounts(id) on delete set null;
+alter table receipts add column if not exists account_id bigint references financial_accounts(id) on delete set null;
+create index if not exists receipts_account_idx on receipts(account_id);
 create index if not exists transfers_owner_date_idx on transfers(owner_id,transfer_date desc);
+create table if not exists bank_transactions (
+  id bigint generated always as identity primary key,
+  account_id bigint not null references financial_accounts(id) on delete cascade,
+  transaction_date date not null,
+  description text not null,
+  amount numeric(12,2) not null,
+  external_id text,
+  matched_expense_id bigint references expenses(id) on delete set null,
+  matched_receipt_id bigint references receipts(id) on delete set null,
+  reconciled boolean not null default false,
+  imported_at timestamptz not null default now(),
+  owner_id text,
+  unique(account_id,external_id)
+);
+create index if not exists bank_transactions_owner_date_idx on bank_transactions(owner_id,transaction_date desc);
+create index if not exists bank_transactions_match_idx on bank_transactions(account_id,transaction_date,amount,reconciled);
 
 create table if not exists recurring_rules (
   id bigint generated always as identity primary key,

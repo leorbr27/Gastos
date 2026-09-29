@@ -159,7 +159,7 @@ const API_BASE="https://br-billowing-river-b43fz1vp-api.compute.c-6.us-east-2.aw
   const s=await a.adapter.getSession();
   if(!s?.data?.user)throw new Error("LOGIN_REQUIRED");
   return a.getJWTToken();
-}const brl=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});const addMonths=(key,n)=>{const[y,m]=key.split("-").map(Number),d=new Date(y,m-1+n,1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")};const isoToday=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date());$("data").value=isoToday();$("recebimentoData").value=isoToday();$("transferData").value=isoToday();$("recorrenciaData").value=isoToday();let categories=[],cards=[],expenses=[],receivables=[],accounts=[],editingId=null;const APP_VERSION="2026.09.29.7";
+}const brl=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});const addMonths=(key,n)=>{const[y,m]=key.split("-").map(Number),d=new Date(y,m-1+n,1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")};const isoToday=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"America/Sao_Paulo"}).format(new Date());$("data").value=isoToday();$("recebimentoData").value=isoToday();$("transferData").value=isoToday();$("recorrenciaData").value=isoToday();let categories=[],cards=[],expenses=[],receivables=[],accounts=[],editingId=null;const APP_VERSION="2026.09.29.8";
 async function api(path,options={}){let r;try{
   const method=String(options.method||"GET").toUpperCase();
   const publicRequest=path==="/auth-config" || (method==="GET" && (path==="/bootstrap" || path==="/")) || (method==="POST" && (path==="/expenses" || path==="/cards" || path==="/receivables"));

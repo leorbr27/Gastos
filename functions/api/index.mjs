@@ -31,7 +31,6 @@ async function ensureSchema() {
       constraint cards_due_day_chk check (due_day is null or due_day between 1 and 31)
     );
     alter table cards add column if not exists credit_limit numeric(12,2) not null default 0;
-    alter table receipts add column if not exists account_id bigint references financial_accounts(id) on delete set null;
     create table if not exists expenses (
       id bigint generated always as identity primary key,
       description text not null,
@@ -100,7 +99,8 @@ async function ensureSchema() {
       owner_id text,
       constraint transfer_accounts_chk check (source_account_id <> destination_account_id)
     );
-    create index if not exists accounts_owner_idx on financial_accounts(owner_id,active);
+    alter table receipts add column if not exists account_id bigint references financial_accounts(id) on delete set null;
+        create index if not exists accounts_owner_idx on financial_accounts(owner_id,active);
     create index if not exists transfers_owner_date_idx on transfers(owner_id,transfer_date desc);
     insert into categories(name) values
       ('Alimentação'),('Carro'),('Contas da casa'),('Saúde'),('Lazer'),

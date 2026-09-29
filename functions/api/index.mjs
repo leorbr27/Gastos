@@ -193,22 +193,47 @@ export default async function handler(request) {
     }
 
     if(request.method==="POST" && /\/receivables\/\d+\/receipts$/.test(path)) {
-      const id=Number(path.match(/(\d+)\/receipts$/)[1]),b=await request.json().catch(()=>null),amount=Number(b?.amount),receivedDate=text(b?.received_date,10)||new Date().toISOString().slice(0,10),observation=text(b?.observation,500);
+      const id=Number(path.match(/(\d+)\/receipts$/)[1]),b=await request.json().catch(()=>null),amount=Number(b?.amount),receivedDate=text(b?.received_date,10)||new Date().toISOString().slice(0,10),observation=text(b?.observation,500),accountId=idOf(b?.account_id);
       if(!Number.isFinite(amount)||amount<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(receivedDate))return json({error:"Valor e data do recebimento são obrigatórios."},400,origin);
+      if(accountId){
+        const a=await pool.query("select id,account_type from financial_accounts where id=$1 and (owner_id=$2 or owner_id is null)",[accountId,userId]);
+        if(!a.rowCount||a.rows[0].account_type==="credit_card")return json({error:"Selecione uma conta bancária ou dinheiro para receber o valor."},400,origin);
+      }
       const owner=await pool.query("select owner_id,expected_amount from receivables where id=$1 and (owner_id=$2 or owner_id is null)",[id,userId]);
       if(!owner.rowCount)return json({error:"Recebimento não encontrado."},404,origin);
       const sum=await pool.query("select coalesce(sum(amount),0) total from receipts where receivable_id=$1",[id]);
       if(Number(sum.rows[0].total)+amount>Number(owner.rows[0].expected_amount)+0.009)return json({error:"O valor recebido não pode ultrapassar o valor previsto."},400,origin);
-      const r=await pool.query("insert into receipts(receivable_id,amount,received_date,observation,owner_id) values($1,$2,$3,$4,$5) returning id,receivable_id,amount,received_date,observation,created_at",[id,Math.round(amount*100)/100,receivedDate,observation,userId]);
+      const r=await pool.query("insert into receipts(receivable_id,amount,received_date,observation,owner_id,account_id) values($1,$2,$3,$4,$5,$6) returning id,receivable_id,amount,received_date,observation,account_id,created_at",[id,Math.round(amount*100)/100,receivedDate,observation,userId,accountId]);
       return json(r.rows[0],201,origin);
+    }
+
+    if(request.method==="GET" && path.endsWith("/cash-flow")) {
+      const days=Math.min(365,Math.max(1,Number(url.searchParams.get("days")||30)||30));
+      const endDate=await pool.query("select (current_date + $1::int) end_date",[days]);
+      const end=endDate.rows[0].end_date;
+      const accountsRows=await pool.query(`select a.id,a.account_type,a.opening_balance,
+        coalesce((select sum(case when t.source_account_id=a.id then -t.amount when t.destination_account_id=a.id then t.amount else 0 end) from transfers t where t.owner_id=$1 and t.transfer_date<=current_date),0) transfer_net,
+        coalesce((select sum(r.amount) from receipts r where r.owner_id=$1 and r.account_id=a.id and r.received_date<=current_date),0) receipt_net,
+        coalesce((select sum(e.amount) from expenses e where e.owner_id=$1 and e.card_id=a.card_id and e.expense_date<=current_date),0) card_expenses,
+        coalesce((select sum(t.amount) from transfers t where t.owner_id=$1 and t.destination_account_id=a.id and t.transfer_type='credit_card_payment' and t.transfer_date<=current_date),0) card_payments
+        from financial_accounts a where a.active=true and (a.owner_id=$1 or a.owner_id is null)`,[userId]);
+      let liquid=0,cardDebt=0;
+      for(const x of accountsRows.rows){
+        if(x.account_type==="credit_card") cardDebt+=Math.max(0,Number(x.opening_balance)+Number(x.card_expenses)-Number(x.card_payments));
+        else liquid+=Number(x.opening_balance)+Number(x.transfer_net)+Number(x.receipt_net);
+      }
+      const rec=await pool.query(`select coalesce(sum(r.expected_amount-coalesce(p.received,0)),0) total from receivables r left join (select receivable_id,sum(amount) received from receipts group by receivable_id) p on p.receivable_id=r.id where (r.owner_id=$1 or r.owner_id is null) and r.due_date>current_date and r.due_date<=$2`,[userId,end]);
+      const exp=await pool.query(`select coalesce(sum(case when e.card_id is null then e.amount else 0 end),0) cash_total,coalesce(sum(case when e.card_id is not null then e.amount else 0 end),0) card_total from expenses e where (e.owner_id=$1 or e.owner_id is null) and e.expense_date>current_date and e.expense_date<=$2`,[userId,end]);
+      const futurePayments=await pool.query(`select coalesce(sum(case when s.account_type in ('bank','cash') then t.amount else 0 end),0) bank_to_card_payments from transfers t join financial_accounts s on s.id=t.source_account_id where t.owner_id=$1 and t.transfer_type='credit_card_payment' and t.transfer_date>current_date and t.transfer_date<=$2`,[userId,end]);
+      return json({days,end_date:end,liquid,card_debt,receivables_due:Number(rec.rows[0].total),future_cash_expenses:Number(exp.rows[0].cash_total),future_card_expenses:Number(exp.rows[0].card_total),future_card_payments:Number(futurePayments.rows[0].bank_to_card_payments),projected_liquid:liquid+Number(rec.rows[0].total)-Number(exp.rows[0].cash_total)-Number(futurePayments.rows[0].bank_to_card_payments),projected_card_debt:cardDebt+Number(exp.rows[0].card_total)-Number(futurePayments.rows[0].bank_to_card_payments)},200,origin);
     }
 
     if(request.method==="GET" && path.endsWith("/accounts")) {
       const rows=await pool.query(`select a.id,a.name,a.account_type,a.opening_balance,a.card_id,a.created_at,
         coalesce((select sum(case when t.source_account_id=a.id then -t.amount when t.destination_account_id=a.id then t.amount else 0 end) from transfers t where t.owner_id=$1),0) transfer_net,
-        coalesce((select sum(r.amount) from receipts r where r.owner_id=$1 and r.account_id=a.id),0) receipt_net,
+        coalesce((select sum(r.amount) from receipts r where r.owner_id=$1 and r.account_id=a.id and r.received_date<=current_date),0) receipt_net,
         coalesce((select sum(e.amount) from expenses e where e.owner_id=$1 and e.card_id=a.card_id and e.expense_date<=current_date),0) card_expenses,
-        coalesce((select sum(t.amount) from transfers t where t.owner_id=$1 and t.destination_account_id=a.id and t.transfer_type='credit_card_payment'),0) card_payments
+        coalesce((select sum(t.amount) from transfers t where t.owner_id=$1 and t.destination_account_id=a.id and t.transfer_type='credit_card_payment' and t.transfer_date<=current_date),0) card_payments
         from financial_accounts a where a.active=true and (a.owner_id=$1 or a.owner_id is null) order by a.name`,[userId]);
       return json({accounts:rows.rows.map(x=>{
         const isCard=x.account_type==="credit_card";

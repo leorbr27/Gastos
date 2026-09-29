@@ -139,6 +139,7 @@ async function ensureSchema() {
       owner_id text,
       constraint recurring_type_chk check (rule_type in ('expense','receivable'))
     );
+    alter table recurring_rules add column if not exists cadence text not null default 'monthly';
     create index if not exists recurring_owner_next_idx on recurring_rules(owner_id,next_date,active);
     insert into categories(name) values
       ('Alimentação'),('Carro'),('Contas da casa'),('Saúde'),('Lazer'),
@@ -216,14 +217,14 @@ export default async function handler(request) {
       const month=text(url.searchParams.get("month"),7);
       const where=["(r.owner_id=$1 or r.owner_id is null)"];
       const params=[userId];
-      if(month && /^\\d{4}-\\d{2}$/.test(month)){params.push(month+"-01");where.push(`r.due_date >= $${params.length}::date and r.due_date < ($${params.length}::date + interval '1 month')`)}
+      if(month && /^\\d{4}-\\d{2}$/.test(month)){params.push(month+"-01");where.push("r.due_date >= $"+params.length+"::date and r.due_date < ($"+params.length+"::date + interval '1 month')")}
       const limit=Math.min(200,Math.max(1,Number(url.searchParams.get("limit")||100)||100));
       const offset=Math.max(0,Number(url.searchParams.get("offset")||0)||0);
-      const rows=await pool.query(`select r.id,r.description,r.expected_amount,r.due_date,r.category,r.receiving_method,r.observation,r.created_at,r.updated_at,r.installment_group,r.installment_total,r.installment_number,r.account_id,a.name account_name,
-        coalesce(sum(p.amount),0)::numeric(12,2) received_amount,count(p.id)::int receipt_count,max(p.received_date) last_received_date
-        from receivables r left join receipts p on p.receivable_id=r.id left join financial_accounts a on a.id=r.account_id
+      const rows=await pool.query(`select r.id,r.description,r.expected_amount,r.due_date,r.category,r.receiving_method,r.observation,r.created_at,r.updated_at,r.installment_group,r.installment_total,r.installment_number,r.account_id,a.name account_name,person.id person_id,person.name person_name,person.phone person_phone,
+        coalesce(sum(rc.amount),0)::numeric(12,2) received_amount,count(rc.id)::int receipt_count,max(rc.received_date) last_received_date
+        from receivables r left join receipts rc on rc.receivable_id=r.id left join financial_accounts a on a.id=r.account_id left join people person on person.id=r.person_id
         where ${where.join(" and ")}
-        group by r.id,a.name order by r.due_date asc,r.installment_number asc,r.id asc limit ${limit} offset ${offset}`,params);
+        group by r.id,a.name,person.id,person.name,person.phone order by r.due_date asc,r.installment_number asc,r.id asc limit ${limit} offset ${offset}`,params);
       const count=await pool.query(`select count(*)::int total from receivables r where ${where.join(" and ")}`,params);
       return json({receivables:rows.rows,total:count.rows[0].total,limit,offset},200,origin);
     }

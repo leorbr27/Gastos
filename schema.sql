@@ -38,6 +38,32 @@ create index if not exists expenses_date_idx on expenses(expense_date desc);
 create index if not exists expenses_category_idx on expenses(category_id);
 create index if not exists expenses_card_idx on expenses(card_id);
 
+create table if not exists receivables (
+  id bigint generated always as identity primary key,
+  description text not null,
+  expected_amount numeric(12,2) not null check (expected_amount > 0),
+  due_date date not null,
+  category text not null default 'Outros',
+  receiving_method text,
+  observation text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  owner_id text
+);
+
+create table if not exists receipts (
+  id bigint generated always as identity primary key,
+  receivable_id bigint not null references receivables(id) on delete cascade,
+  amount numeric(12,2) not null check (amount > 0),
+  received_date date not null default current_date,
+  observation text,
+  created_at timestamptz not null default now(),
+  owner_id text
+);
+
+create index if not exists receivables_owner_date_idx on receivables(owner_id,due_date desc);
+create index if not exists receipts_receivable_idx on receipts(receivable_id);
+
 insert into categories (name) values
   ('Alimentação'), ('Carro'), ('Contas da casa'), ('Saúde'),
   ('Lazer'), ('Compras'), ('Educação'), ('Assinaturas'),

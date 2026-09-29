@@ -289,8 +289,8 @@ export default async function handler(request) {
       return json(r.rows[0],200,origin);
     }
 
-    if(request.method==="POST" && /\\/receivables\\/\\d+\\/receipts$/.test(path)) {
-      const id=Number(path.match(/(\\d+)\\/receipts$/)[1]),b=await request.json().catch(()=>null),amount=Number(b?.amount),receivedDate=text(b?.received_date,10)||new Date().toISOString().slice(0,10),observation=text(b?.observation,500),accountId=idOf(b?.account_id);
+    if(request.method==="POST" && /\/receivables\/\d+\/receipts$/.test(path)) {
+      const id=Number(path.match(/(\d+)\/receipts$/)[1]),b=await request.json().catch(()=>null),amount=Number(b?.amount),receivedDate=text(b?.received_date,10)||new Date().toISOString().slice(0,10),observation=text(b?.observation,500),accountId=idOf(b?.account_id);
       if(!Number.isFinite(amount)||amount<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(receivedDate))return json({error:"Valor e data do recebimento são obrigatórios."},400,origin);
       const owner=await pool.query("select owner_id,expected_amount,account_id from receivables where id=$1 and (owner_id=$2 or owner_id is null)",[id,userId]);
       if(!owner.rowCount)return json({error:"Recebimento não encontrado."},404,origin);

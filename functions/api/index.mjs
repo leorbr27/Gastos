@@ -56,6 +56,9 @@ async function ensureSchema() {
       ('Compras'),('Educação'),('Assinaturas'),('Trabalho'),('Outros'),('Lanches'),
       ('Empréstimos feitos'),('Empréstimos tomados'),('Impostos e taxas'),('Moto'),('Transporte por aplicativo')
     on conflict(name) do nothing;
+
+    await client.query(`update expenses set category_id=(select id from categories where name='Carro' limit 1) where category_id=(select id from categories where name='Transporte' limit 1);`);
+    await client.query(`update categories set active=false where name='Transporte';`);
     insert into cards(name) values
       ('Pix'),('Dinheiro'),('Cartão de débito'),('Cartão de crédito')
     on conflict(name) do nothing;

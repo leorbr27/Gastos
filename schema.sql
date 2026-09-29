@@ -144,3 +144,6 @@ on conflict (name) do nothing;
 insert into cards (name) values
   ('Pix'), ('Dinheiro'), ('Cartão de débito'), ('Cartão de crédito')
 on conflict (name) do nothing;
+
+
+update categories set active=false where name='Transporte';

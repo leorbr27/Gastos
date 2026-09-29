@@ -64,6 +64,34 @@ create table if not exists receipts (
 create index if not exists receivables_owner_date_idx on receivables(owner_id,due_date desc);
 create index if not exists receipts_receivable_idx on receipts(receivable_id);
 
+create table if not exists financial_accounts (
+  id bigint generated always as identity primary key,
+  name text not null unique,
+  account_type text not null default 'bank',
+  opening_balance numeric(12,2) not null default 0,
+  active boolean not null default true,
+  card_id bigint references cards(id) on delete set null,
+  created_at timestamptz not null default now(),
+  owner_id text
+);
+
+create table if not exists transfers (
+  id bigint generated always as identity primary key,
+  source_account_id bigint not null references financial_accounts(id) on delete restrict,
+  destination_account_id bigint not null references financial_accounts(id) on delete restrict,
+  amount numeric(12,2) not null check (amount > 0),
+  transfer_date date not null default current_date,
+  transfer_type text not null default 'transfer',
+  description text,
+  observation text,
+  created_at timestamptz not null default now(),
+  owner_id text,
+  constraint transfer_accounts_chk check (source_account_id <> destination_account_id)
+);
+
+create index if not exists accounts_owner_idx on financial_accounts(owner_id,active);
+create index if not exists transfers_owner_date_idx on transfers(owner_id,transfer_date desc);
+
 insert into categories (name) values
   ('Alimentação'), ('Carro'), ('Contas da casa'), ('Saúde'),
   ('Lazer'), ('Compras'), ('Educação'), ('Assinaturas'),

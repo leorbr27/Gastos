@@ -78,7 +78,6 @@ async function ensureSchema() {
     );
     create index if not exists receivables_owner_date_idx on receivables(owner_id,due_date desc);
     create index if not exists receivables_installment_group_idx on receivables(installment_group);
-    create index if not exists receivables_account_idx on receivables(account_id);
     create index if not exists receipts_receivable_idx on receipts(receivable_id);
     create table if not exists financial_accounts (
       id bigint generated always as identity primary key,
@@ -91,6 +90,7 @@ async function ensureSchema() {
       owner_id text
     );
     alter table receivables add column if not exists account_id bigint references financial_accounts(id) on delete set null;
+    create index if not exists receivables_account_idx on receivables(account_id);
     create table if not exists transfers (
       id bigint generated always as identity primary key,
       source_account_id bigint not null references financial_accounts(id) on delete restrict,

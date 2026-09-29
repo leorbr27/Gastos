@@ -257,7 +257,7 @@ window.editarRecebimento=async(id)=>{
     $("recebimentoValor").value=editingReceivableAll?group.reduce((sum,v)=>sum+Number(v.expected_amount||0),0).toFixed(2):Number(x.expected_amount).toFixed(2);
     $("recebimentoData").value=String(editingReceivableAll?group[0].due_date:x.due_date).slice(0,10);
     $("recebimentoCategoria").value=x.category||"Outros";$("recebimentoMetodo").value=x.receiving_method||"";
-    $("recebimentoConta").value=x.account_id?String(x.account_id):"";
+    $("recebimentoConta").value=x.account_id?String(x.account_id):"";fillPeopleSelect(x.person_id||"");
     $("recebimentoObservacao").value=x.observation||"";$("recebimentoParcelas").value=editingReceivableAll?group.length:1;
     $("salvarRecebimento").textContent=editingReceivableAll?"Alterar parcelas":"Alterar recebimento";$("cancelarRecebimento").style.display="";
     $("incomeCard").scrollIntoView({behavior:"smooth",block:"start"})
@@ -281,7 +281,7 @@ $("salvarRecebimento").onclick=async()=>{
     }
   }catch(e){showStatus(e.message||"Não foi possível salvar o recebimento.")}
 };
-async function loadRecurring(){try{const r=await api("/recurring");const list=Array.isArray(r?.rules)?r.rules:[];$("listaRecorrencias").innerHTML=list.length?list.map(x=>'<div class="item"><div><div class="desc">🔁 '+esc(x.description)+'</div><div class="meta">'+(x.rule_type==="expense"?"Gasto":"Recebimento")+' · mensal · próxima data '+formatDate(x.next_date)+'</div></div><strong class="amount">'+brl(x.amount)+'</strong></div>').join(""):'<div class="empty">Nenhuma recorrência cadastrada.</div>'}catch(e){$("listaRecorrencias").innerHTML='<div class="empty">Não foi possível carregar as recorrências.</div>'}}
+async function loadRecurring(){try{const r=await api("/recurring");const list=Array.isArray(r?.rules)?r.rules:[];$("listaRecorrencias").innerHTML=list.length?list.map(x=>'<div class="item"><div><div class="desc">🔁 '+esc(x.description)+'</div><div class="meta">'+(x.rule_type==="expense"?"Gasto":"Recebimento")+' · '+(x.cadence==="biweekly"?"quinzenal":"mensal")+' · próxima data '+formatDate(x.next_date)+'</div></div><strong class="amount">'+brl(x.amount)+'</strong></div>').join(""):'<div class="empty">Nenhuma recorrência cadastrada.</div>'}catch(e){$("listaRecorrencias").innerHTML='<div class="empty">Não foi possível carregar as recorrências.</div>'}}
 async function loadDashboard(){try{const r=await api("/dashboard");$("dashGastos").textContent=brl(r.month.expenses);$("dashGastosQtd").textContent=r.month.expense_count+" lançamento(s)";$("dashRecebido").textContent=brl(r.month.received);$("dashResultado").textContent=brl(r.month.net);$("dashDisponivel").textContent=brl(r.liquid);$("dashCartao").textContent=brl(r.card_debt);$("dashReceber").textContent=brl(r.receivables_due);$("dashProjetado").textContent=brl(r.projected_liquid);$("dashFuturos").textContent=brl(Number(r.future_cash_expenses)+Number(r.future_card_expenses));$("dashCategorias").innerHTML=r.categories?.length?r.categories.map(x=>'<div class="legend-row"><span>'+esc(x.category)+'</span><strong>'+brl(x.total)+'</strong></div>').join(""):'<div class="empty">Nenhum gasto no mês.</div>';$("dashRecebimentos").innerHTML=r.upcoming_receivables?.length?r.upcoming_receivables.map(x=>'<div class="item"><div><div class="desc">'+esc(x.description)+'</div><div class="meta">'+formatDate(x.due_date)+'</div></div><strong class="amount">'+brl(x.pending)+'</strong></div>').join(""):'<div class="empty">Nenhum recebimento previsto nos próximos 30 dias.</div>';$("dashUltimos").innerHTML=r.recent_expenses?.length?r.recent_expenses.map(x=>'<div class="item"><div><div class="desc">'+esc(x.description)+'</div><div class="meta">'+formatDate(x.expense_date)+' · '+esc(x.category||"Outros")+'</div></div><strong class="amount">'+brl(x.amount)+'</strong></div>').join(""):'<div class="empty">Nenhum gasto cadastrado.</div>'}catch(e){$("dashUltimos").innerHTML='<div class="empty">Não foi possível carregar o dashboard.</div>'}}
 async function loadCashFlow(){try{const r=await api("/cash-flow?days=30");$("fluxoLiquido").textContent=brl(r.liquid);$("fluxoCartao").textContent=brl(r.card_debt);$("fluxoReceber").textContent=brl(r.receivables_due);$("fluxoProjetado").textContent=brl(r.projected_liquid);$("fluxoDetalhes").textContent="Próximos 30 dias: "+brl(r.future_cash_expenses)+" em gastos de contas/dinheiro e "+brl(r.future_card_expenses)+" em compras futuras no cartão."}catch(e){$("fluxoDetalhes").textContent="Não foi possível carregar a projeção.";}}
 let csvRows=[];
@@ -377,7 +377,7 @@ $("fPeriodo").onchange=render;$("fCategoria").onchange=render;$("fPagamento").on
 load();
 
 </script>
-<div class="last-update" aria-label="Última atualização"><span id="lastUpdate">Versão 2026.09.29.11 · código: carregando...</span></div>
+<div class="last-update" aria-label="Última atualização"><span id="lastUpdate">Versão 2026.09.29.12 · código: carregando...</span></div>
 <script>
 (async()=>{
   const el=document.getElementById("lastUpdate");

@@ -120,7 +120,7 @@ button{border:0;border-radius:13px;height:46px;padding:0 16px;font-size:15px;fon
 <button class="secondary" id="importarCsv" style="width:100%;margin-top:12px" disabled>Importar e conciliar</button>
 <div id="resultadoConciliacao" class="meta" style="margin-top:12px"></div>
 </section>
-<section class="card"><div class="section-title"><span>🔎</span><span>Revisão</span></div><div id="listaRevisao" class="list"><div class="empty">Selecione uma conta.</div></div></section>
+<section class="card"><div class="section-title"><span>🔎</span><span>Revisão</span></div><div class="grid"><div><label for="conciliacaoStatus">Exibir</label><select id="conciliacaoStatus"><option value="unmatched">Pendentes</option><option value="all">Todos</option><option value="matched">Conciliados</option></select></div></div><div id="listaRevisao" class="list" style="margin-top:14px"><div class="empty">Selecione uma conta no bloco acima.</div></div></section>
 <section class="card">
 <div class="section-title"><span class="card-emoji">🔁</span><span>Recorrências</span></div>
 <p class="section-description">Crie uma regra mensal para gastos ou recebimentos. O sistema gera as ocorrências futuras automaticamente.</p>
@@ -191,6 +191,44 @@ function csvField(o,names){for(const n of names){if(o[n]!==undefined&&o[n]!=="")
 function normalizeCsvAmount(v){let x=String(v||"").trim().replace(/R\$\s?/g,"").replace(/\./g,"").replace(",",".");return Number(x)}
 function renderCsvPreview(){const el=$("csvPreview");if(!csvRows.length){el.textContent="Nenhum lançamento válido no CSV.";return}const sample=csvRows.slice(0,5).map(x=>esc(JSON.stringify(x))).join("<br>");el.innerHTML="<strong>"+csvRows.length+" linhas lidas.</strong><br>"+sample}
 function fillReconciliationAccounts(){const opts='<option value="">Selecione</option>'+accounts.filter(a=>a.account_type!=="credit_card").map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join("");$("conciliacaoConta").innerHTML=opts}
+async function carregarRevisao(){
+  const accountId=Number($("conciliacaoConta").value)||0;
+  const box=$("listaRevisao");
+  if(!accountId){box.innerHTML='<div class="empty">Selecione uma conta no bloco acima.</div>';return}
+  try{
+    const base="/re"+"conciliation";
+    const r=await api(base+"?account_id="+accountId);
+    const status=$("conciliacaoStatus")?.value||"unmatched";
+    const rows=(Array.isArray(r?.transactions)?r.transactions:[]).filter(x=>status==="all"||(status==="matched"?x.reconciled:!x.reconciled));
+    if(!rows.length){box.innerHTML='<div class="empty">Nenhum lançamento para este filtro.</div>';return}
+    box.innerHTML=rows.map(x=>{
+      const val=Number(x.amount),textVal=(val<0?"-":"")+brl(Math.abs(val));
+      const state=x.reconciled?"Conciliado":"Pendente";
+      const action=x.reconciled?'<button class="ghost" type="button" data-rev-un="'+x.id+'">Desfazer</button>':'<button class="secondary" type="button" data-rev="'+x.id+'">Escolher</button><div id="revopt-'+x.id+'" class="meta" style="margin-top:8px"></div>';
+      return '<div class="item"><div><div class="desc">'+esc(x.description)+'</div><div class="meta">'+formatDate(x.transaction_date)+' · '+state+'</div></div><div style="text-align:right"><strong class="amount">'+textVal+'</strong><div style="margin-top:8px">'+action+'</div></div></div>'
+    }).join("");
+    box.querySelectorAll("[data-rev]").forEach(b=>b.onclick=()=>carregarOpcoes(Number(b.dataset.rev)));
+    box.querySelectorAll("[data-rev-un]").forEach(b=>b.onclick=()=>desfazerRevisao(Number(b.dataset.revUn)));
+  }catch(e){box.innerHTML='<div class="empty">Não foi possível carregar os lançamentos.</div>'}
+}
+async function carregarOpcoes(id){
+  const accountId=Number($("conciliacaoConta").value)||0,host=$("revopt-"+id);
+  if(!host)return;
+  try{
+    const base="/re"+"conciliation";
+    const r=await api(base+"/candidates?account_id="+accountId+"&transaction_id="+id);
+    const list=Array.isArray(r?.candidates)?r.candidates:[];
+    if(!list.length){host.textContent="Nenhum lançamento compatível por valor e data.";return}
+    host.innerHTML='<select id="revsel-'+id+'" style="width:100%;margin-top:6px"><option value="">Selecione...</option>'+list.map(x=>'<option value="'+Number(x.id||x.receipt_id)+'">'+esc(x.description||("Recebimento em "+formatDate(x.received_date)))+' · '+formatDate(x.expense_date||x.received_date)+' · '+brl(x.amount)+'</option>').join("")+'</select><button class="primary" type="button" style="width:100%;margin-top:8px" data-rev-ok="'+id+'">Confirmar</button>';
+    host.querySelector("[data-rev-ok]").onclick=async()=>{
+      const target=Number($("revsel-"+id).value)||0;if(!target){alert("Selecione um lançamento.");return}
+      try{await api(base+"/"+id+"/match",{method:"POST",body:JSON.stringify({target_type:r.type,target_id:target})});await carregarRevisao();await loadAccounts();showStatus("Lançamento associado com sucesso.","ok")}catch(e){showStatus(e.message||"Não foi possível associar o lançamento.")}
+    };
+  }catch(e){host.textContent=e.message||"Não foi possível buscar opções."}
+}
+async function desfazerRevisao(id){
+  try{const base="/re"+"conciliation";await api(base+"/"+id+"/unmatch",{method:"POST"});await carregarRevisao();await loadAccounts();showStatus("Associação desfeita.","ok")}catch(e){showStatus(e.message||"Não foi possível desfazer a associação.")}
+}
 async function loadAccounts(){const r=await api("/accounts");accounts=Array.isArray(r?.accounts)?r.accounts:[];renderAccounts();fillAccountSelects();fillReconciliationAccounts();const t=await api("/transfers");renderTransfers(Array.isArray(t?.transfers)?t.transfers:[]);await loadCashFlow()}
 function renderAccounts(){const el=$("listaContas");if(!accounts.length){el.innerHTML='<div class="empty">Nenhuma conta cadastrada.</div>';return}el.innerHTML=accounts.map(a=>'<div class="metric"><small>'+esc(a.name)+' · '+(a.account_type==="credit_card"?"Cartão de crédito":a.account_type==="cash"?"Dinheiro":"Conta")+'</small><strong>'+brl(a.balance)+'</strong>'+(a.account_type==="credit_card"?'<div class="meta">Dívida atual: '+brl(a.debt)+'</div>':'')+'</div>').join("")}
 function fillAccountSelects(){const opts='<option value="">Selecione</option>'+accounts.map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join("");$("transferOrigem").innerHTML=opts;$("transferDestino").innerHTML=opts;const cardOpts='<option value="">Nenhum</option>'+cards.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join("");$("contaCartao").innerHTML=cardOpts;const receivingOpts='<option value="">Selecione</option>'+accounts.filter(a=>a.account_type!=="credit_card").map(a=>'<option value="'+a.id+'">'+esc(a.name)+'</option>').join("");$("recebimentoConta").innerHTML=receivingOpts}
@@ -199,6 +237,8 @@ $("salvarConta").onclick=async()=>{const name=$("contaNome").value.trim(),accoun
 $("salvarTransferencia").onclick=async()=>{const source_account_id=Number($("transferOrigem").value),destination_account_id=Number($("transferDestino").value),amount=Number($("transferValor").value),transfer_date=$("transferData").value,transfer_type=$("transferTipo").value,description=$("transferDescricao").value.trim();if(!source_account_id||!destination_account_id||!Number.isFinite(amount)||amount<=0||!transfer_date){alert("Preencha origem, destino, valor e data.");return}try{await api("/transfers",{method:"POST",body:JSON.stringify({source_account_id,destination_account_id,amount,transfer_date,transfer_type,description})});$("transferValor").value="";$("transferDescricao").value="";await loadAccounts();showStatus("Transferência registrada com sucesso.","ok")}catch(e){showStatus(e.message||"Não foi possível registrar a transferência.")}};
 $("baixar").onclick=()=>{location.href="export.html"};
 $("entrar").onclick=()=>{location.href="auth.html"};
+$("conciliacaoStatus").onchange=carregarRevisao;
+$("conciliacaoConta").onchange=carregarRevisao;
 $("arquivoCsv").onchange=async e=>{const file=e.target.files?.[0];if(!file){csvRows=[];$("importarCsv").disabled=true;renderCsvPreview();return}const text=await file.text(),raw=parseCsvText(text);csvRows=raw.map(o=>{const date=csvField(o,["data","date","transaction_date","dt"]),desc=csvField(o,["descricao","descrição","description","historico","histórico","memo"]),amt=normalizeCsvAmount(csvField(o,["valor","amount","value"]));return {transaction_date:date.slice(0,10),description:desc,amount:amt,external_id:csvField(o,["id","id_externo","external_id","codigo","documento"])} }).filter(x=>x.transaction_date&&x.description&&Number.isFinite(x.amount));renderCsvPreview();$("importarCsv").disabled=!csvRows.length};
 $("importarCsv").onclick=async()=>{const account_id=Number($("conciliacaoConta").value);if(!account_id){alert("Selecione a conta.");return}if(!csvRows.length){alert("Escolha um CSV válido.");return}try{const r=await api("/reconciliation/import",{method:"POST",body:JSON.stringify({account_id,transactions:csvRows})});$("resultadoConciliacao").textContent="Importados: "+r.imported+" · conciliados automaticamente: "+r.matched+" · pendentes: "+r.unmatched+" · ignorados: "+r.skipped;showStatus("CSV importado com sucesso.","ok");await loadAccounts()}catch(e){showStatus(e.message||"Não foi possível importar o CSV.")}};
 $("salvarRecorrencia").onclick=async()=>{const rule_type=$("recorrenciaTipo").value,description=$("recorrenciaDescricao").value.trim(),amount=Number($("recorrenciaValor").value),first_date=$("recorrenciaData").value,category_id=$("recorrenciaCategoria").value||null,card_id=$("recorrenciaCartao").value||null;if(!description||!Number.isFinite(amount)||amount<=0||!first_date){alert("Preencha tipo, descrição, valor e primeira data.");return}try{await api("/recurring",{method:"POST",body:JSON.stringify({rule_type,description,amount,first_date,category_id,card_id})});await api("/recurring/generate?days=90",{method:"POST"});$("recorrenciaDescricao").value="";$("recorrenciaValor").value="";$("recorrenciaData").value=isoToday();$("recorrenciaCategoria").value="";$("recorrenciaCartao").value="";await loadRecurring();await loadAllExpenses().then(x=>{expenses=x;buildPeriods();render()});await loadReceivables();showStatus("Recorrência criada e ocorrências futuras geradas.","ok")}catch(e){showStatus(e.message||"Não foi possível criar a recorrência.")}};

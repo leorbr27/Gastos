@@ -202,7 +202,7 @@ export default async function handler(request) {
         coalesce((select sum(case when t.source_account_id=a.id then -t.amount when t.destination_account_id=a.id then t.amount else 0 end) from transfers t where t.owner_id=$1),0) transfer_net,
         coalesce((select sum(e.amount) from expenses e where e.owner_id=$1 and e.card_id=a.card_id),0) card_expenses
         from financial_accounts a where a.active=true and (a.owner_id=$1 or a.owner_id is null) order by a.name`,[userId]);
-      return json({accounts:rows.rows.map(x=>({...x,balance:Number(x.opening_balance)+Number(x.transfer_net)}))},200,origin);
+      return json({accounts:rows.rows.map(x=>({...x,balance:Number(x.account_type==="credit_card"?Number(x.opening_balance)-Number(x.card_expenses)+Number(x.transfer_net):Number(x.opening_balance)+Number(x.transfer_net)),debt:Number(x.account_type==="credit_card"?Math.max(0,Number(x.card_expenses)-Number(x.transfer_net)):0)}))},200,origin);
     }
 
     if(request.method==="POST" && path.endsWith("/accounts")) {

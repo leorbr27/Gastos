@@ -199,7 +199,7 @@ export default async function handler(request) {
 
     if(request.method==="GET" && path==="/auth-config") return json({auth_url:AUTH_BASE},200,origin);
 
-    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.7",schema_version:9,auth:true,pagination:true,receivables:true,partial_receipts:true,accounts:true,transfers:true},200,origin);
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.8",schema_version:10,auth:true,pagination:true,receivables:true,partial_receipts:true,accounts:true,transfers:true,reconciliation_manual:true},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards]=await Promise.all([
@@ -337,6 +337,56 @@ export default async function handler(request) {
         from expenses e where (e.owner_id=$1 or e.owner_id is null) and e.expense_date>current_date and e.expense_date<=$2`,[userId,future_end]);
       const due=await pool.query(`select coalesce(sum(r.expected_amount-coalesce(p.received,0)),0) total from receivables r left join (select receivable_id,sum(amount) received from receipts group by receivable_id) p on p.receivable_id=r.id where (r.owner_id=$1 or r.owner_id is null) and r.due_date>current_date and r.due_date<=$2`,[userId,future_end]);
       return json({month:{expenses:Number(exp.rows[0].total),expense_count:Number(exp.rows[0].count),received:Number(rec.rows[0].received),net:Number(rec.rows[0].received)-Number(exp.rows[0].total)},liquid,card_debt:cardDebt,receivables_due:Number(due.rows[0].total),projected_liquid:liquid+Number(due.rows[0].total)-Number(cash.rows[0].cash_total),future_cash_expenses:Number(cash.rows[0].cash_total),future_card_expenses:Number(cash.rows[0].card_total),categories:cats.rows,upcoming_receivables:upcoming.rows.map(x=>({...x,pending:Math.max(0,Number(x.expected_amount)-Number(x.received))})),recent_expenses:recent.rows},200,origin);
+    }
+
+    if(request.method==="GET" && path.endsWith("/reconciliation/candidates")) {
+      const accountId=idOf(url.searchParams.get("account_id")),transactionId=idOf(url.searchParams.get("transaction_id"));
+      if(!accountId||!transactionId)return json({error:"Conta e transação são obrigatórias."},400,origin);
+      const tx=await pool.query("select id,account_id,transaction_date,amount from bank_transactions where id=$1 and account_id=$2 and (owner_id=$3 or owner_id is null)",[transactionId,accountId,userId]);
+      if(!tx.rowCount)return json({error:"Transação não encontrada."},404,origin);
+      const t=tx.rows[0],d=t.transaction_date;
+      if(Number(t.amount)<0){
+        const rows=await pool.query(`select e.id,e.description,e.amount,e.expense_date,e.category_id from expenses e
+          where (e.owner_id=$1 or e.owner_id is null) and e.card_id is null and e.amount=$2
+            and e.expense_date between ($3::date-7) and ($3::date+7)
+            and not exists(select 1 from bank_transactions b where b.matched_expense_id=e.id and b.id<>$4)
+          order by abs(e.expense_date-$3::date),e.id desc limit 50`,[userId,Math.abs(Number(t.amount)),d,transactionId]);
+        return json({type:"expense",candidates:rows.rows},200,origin);
+      }
+      const rows=await pool.query(`select r.id as receipt_id,r.amount,r.received_date,r.observation,rv.description
+        from receipts r join receivables rv on rv.id=r.receivable_id
+        where (r.owner_id=$1 or r.owner_id is null) and r.amount=$2
+          and r.received_date between ($3::date-7) and ($3::date+7)
+          and not exists(select 1 from bank_transactions b where b.matched_receipt_id=r.id and b.id<>$4)
+        order by abs(r.received_date-$3::date),r.id desc limit 50`,[userId,Math.abs(Number(t.amount)),d,transactionId]);
+      return json({type:"receipt",candidates:rows.rows},200,origin);
+    }
+
+    if(request.method==="POST" && path.match(/\/reconciliation\/\d+\/match$/)) {
+      const m=path.match(/\/reconciliation\/(\d+)\/match$/),transactionId=idOf(m?.[1]),b=await request.json().catch(()=>null);
+      const targetType=String(b?.target_type||""),targetId=idOf(b?.target_id);
+      if(!transactionId||!targetId||!["expense","receipt"].includes(targetType))return json({error:"Transação, tipo e lançamento são obrigatórios."},400,origin);
+      const tx=await pool.query("select id,account_id,transaction_date,amount from bank_transactions where id=$1 and (owner_id=$2 or owner_id is null)",[transactionId,userId]);
+      if(!tx.rowCount)return json({error:"Transação bancária não encontrada."},404,origin);
+      const t=tx.rows[0],amount=Math.abs(Number(t.amount)),d=t.transaction_date;
+      if(targetType==="expense"){
+        const c=await pool.query("select id,amount,expense_date from expenses where id=$1 and card_id is null and amount=$2 and expense_date between ($3::date-7) and ($3::date+7) and (owner_id=$4 or owner_id is null)",[targetId,amount,d,userId]);
+        if(!c.rowCount)return json({error:"O gasto não corresponde ao valor/data da transação."},400,origin);
+        await pool.query("update bank_transactions set matched_expense_id=$1,matched_receipt_id=null,reconciled=true where id=$2",[targetId,transactionId]);
+      }else{
+        const c=await pool.query("select r.id,r.amount,r.received_date from receipts r where r.id=$1 and r.amount=$2 and r.received_date between ($3::date-7) and ($3::date+7) and (r.owner_id=$4 or r.owner_id is null)",[targetId,amount,d,userId]);
+        if(!c.rowCount)return json({error:"O recebimento não corresponde ao valor/data da transação."},400,origin);
+        await pool.query("update bank_transactions set matched_expense_id=null,matched_receipt_id=$1,reconciled=true where id=$2",[targetId,transactionId]);
+      }
+      return json({ok:true},200,origin);
+    }
+
+    if(request.method==="POST" && path.match(/\/reconciliation\/\d+\/unmatch$/)) {
+      const m=path.match(/\/reconciliation\/(\d+)\/unmatch$/),transactionId=idOf(m?.[1]);
+      if(!transactionId)return json({error:"Transação inválida."},400,origin);
+      const r=await pool.query("update bank_transactions set matched_expense_id=null,matched_receipt_id=null,reconciled=false where id=$1 and (owner_id=$2 or owner_id is null) returning id",[transactionId,userId]);
+      if(!r.rowCount)return json({error:"Transação bancária não encontrada."},404,origin);
+      return json({ok:true},200,origin);
     }
 
     if(request.method==="GET" && path.endsWith("/cash-flow")) {

@@ -261,6 +261,7 @@ export default async function handler(request) {
       const id=Number(path.match(/(\\d+)$/)[1]),b=await request.json().catch(()=>null);
       const description=text(b?.description,200),expected=Number(b?.expected_amount),due=text(b?.due_date,10),category=text(b?.category,100)||"Outros",method=text(b?.receiving_method,100),observation=text(b?.observation,500),accountId=idOf(b?.account_id),applyAll=!!b?.apply_to_installments;
       if(!description||!Number.isFinite(expected)||expected<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(due))return json({error:"Descrição, valor e data prevista válidos são obrigatórios."},400,origin);
+      if(personId){const p=await pool.query("select id from people where id=$1 and (owner_id=$2 or owner_id is null)",[personId,userId]);if(!p.rowCount)return json({error:"Pessoa não encontrada."},400,origin)}
       if(accountId){
         const a=await pool.query("select id,account_type from financial_accounts where id=$1 and (owner_id=$2 or owner_id is null)",[accountId,userId]);
         if(!a.rowCount||a.rows[0].account_type==="credit_card")return json({error:"Selecione uma conta bancária ou dinheiro como destino."},400,origin);
@@ -340,10 +341,10 @@ export default async function handler(request) {
     }
 
     if(request.method==="POST" && path.endsWith("/recurring")) {
-      const b=await request.json().catch(()=>null),ruleType=text(b?.rule_type,20),description=text(b?.description,200),amount=Number(b?.amount),firstDate=text(b?.first_date,10),categoryId=idOf(b?.category_id),cardId=idOf(b?.card_id);
-      if(!["expense","receivable"].includes(ruleType)||!description||!Number.isFinite(amount)||amount<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(firstDate))return json({error:"Tipo, descrição, valor e primeira data válidos são obrigatórios."},400,origin);
+      const b=await request.json().catch(()=>null),ruleType=text(b?.rule_type,20),description=text(b?.description,200),amount=Number(b?.amount),firstDate=text(b?.first_date,10),categoryId=idOf(b?.category_id),cardId=idOf(b?.card_id),cadence=text(b?.cadence,20)||"monthly";
+      if(!["expense","receivable"].includes(ruleType)||!["monthly","biweekly"].includes(cadence)||!description||!Number.isFinite(amount)||amount<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(firstDate))return json({error:"Tipo, frequência, descrição, valor e primeira data válidos são obrigatórios."},400,origin);
       if(ruleType==="expense"&&cardId===null&&categoryId===null)return json({error:"Informe ao menos uma categoria ou um cartão para a despesa recorrente."},400,origin);
-      const r=await pool.query("insert into recurring_rules(rule_type,description,amount,category_id,card_id,first_date,next_date,owner_id) values($1,$2,$3,$4,$5,$6,$6,$7) returning id,rule_type,description,amount,category_id,card_id,first_date,next_date,active,created_at",[ruleType,description,Math.round(amount*100)/100,categoryId,ruleType==="expense"?cardId:null,firstDate,userId]);
+      const r=await pool.query("insert into recurring_rules(rule_type,description,amount,category_id,card_id,first_date,next_date,cadence,owner_id) values($1,$2,$3,$4,$5,$6,$6,$7,$8) returning id,rule_type,description,amount,category_id,card_id,first_date,next_date,cadence,active,created_at",[ruleType,description,Math.round(amount*100)/100,categoryId,ruleType==="expense"?cardId:null,firstDate,cadence,userId]);
       return json(r.rows[0],201,origin);
     }
 

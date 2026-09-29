@@ -73,6 +73,31 @@ async function ensureSchema() {
     );
     create index if not exists receivables_owner_date_idx on receivables(owner_id,due_date desc);
     create index if not exists receipts_receivable_idx on receipts(receivable_id);
+    create table if not exists financial_accounts (
+      id bigint generated always as identity primary key,
+      name text not null unique,
+      account_type text not null default 'bank',
+      opening_balance numeric(12,2) not null default 0,
+      active boolean not null default true,
+      card_id bigint references cards(id) on delete set null,
+      created_at timestamptz not null default now(),
+      owner_id text
+    );
+    create table if not exists transfers (
+      id bigint generated always as identity primary key,
+      source_account_id bigint not null references financial_accounts(id) on delete restrict,
+      destination_account_id bigint not null references financial_accounts(id) on delete restrict,
+      amount numeric(12,2) not null check (amount > 0),
+      transfer_date date not null default current_date,
+      transfer_type text not null default 'transfer',
+      description text,
+      observation text,
+      created_at timestamptz not null default now(),
+      owner_id text,
+      constraint transfer_accounts_chk check (source_account_id <> destination_account_id)
+    );
+    create index if not exists accounts_owner_idx on financial_accounts(owner_id,active);
+    create index if not exists transfers_owner_date_idx on transfers(owner_id,transfer_date desc);
     insert into categories(name) values
       ('Alimentação'),('Carro'),('Contas da casa'),('Saúde'),('Lazer'),
       ('Alimentação'),('Transporte'),('Contas da casa'),('Saúde'),('Lazer'),
@@ -135,7 +160,7 @@ export default async function handler(request) {
 
     if(request.method==="GET" && path==="/auth-config") return json({auth_url:AUTH_BASE},200,origin);
 
-    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.2",schema_version:4,auth:true,pagination:true,receivables:true,partial_receipts:true},200,origin);
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.3",schema_version:5,auth:true,pagination:true,receivables:true,partial_receipts:true,accounts:true,transfers:true},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards]=await Promise.all([
@@ -170,6 +195,37 @@ export default async function handler(request) {
       if(Number(sum.rows[0].total)+amount>Number(owner.rows[0].expected_amount)+0.009)return json({error:"O valor recebido não pode ultrapassar o valor previsto."},400,origin);
       const r=await pool.query("insert into receipts(receivable_id,amount,received_date,observation,owner_id) values($1,$2,$3,$4,$5) returning id,receivable_id,amount,received_date,observation,created_at",[id,Math.round(amount*100)/100,receivedDate,observation,userId]);
       return json(r.rows[0],201,origin);
+    }
+
+    if(request.method==="GET" && path.endsWith("/accounts")) {
+      const rows=await pool.query(`select a.id,a.name,a.account_type,a.opening_balance,a.card_id,a.created_at,
+        coalesce((select sum(case when t.source_account_id=a.id then -t.amount when t.destination_account_id=a.id then t.amount else 0 end) from transfers t where t.owner_id=$1),0) transfer_net,
+        coalesce((select sum(e.amount) from expenses e where e.owner_id=$1 and e.card_id=a.card_id),0) card_expenses
+        from financial_accounts a where a.active=true and (a.owner_id=$1 or a.owner_id is null) order by a.name`,[userId]);
+      return json({accounts:rows.rows.map(x=>({...x,balance:Number(x.opening_balance)+Number(x.transfer_net)}))},200,origin);
+    }
+
+    if(request.method==="POST" && path.endsWith("/accounts")) {
+      const b=await request.json().catch(()=>null),name=text(b?.name,100),type=text(b?.account_type,30)||"bank",opening=Number(b?.opening_balance||0),cardId=idOf(b?.card_id);
+      if(!name||!["bank","cash","credit_card"].includes(type)||!Number.isFinite(opening))return json({error:"Nome, tipo e saldo inicial válidos são obrigatórios."},400,origin);
+      const r=await pool.query(`insert into financial_accounts(name,account_type,opening_balance,card_id,owner_id) values($1,$2,$3,$4,$5) returning id,name,account_type,opening_balance,card_id,created_at`,[name,type,Math.round(opening*100)/100,cardId,userId]);
+      return json({...r.rows[0],balance:Number(r.rows[0].opening_balance)},201,origin);
+    }
+
+    if(request.method==="POST" && path.endsWith("/transfers")) {
+      const b=await request.json().catch(()=>null),source=idOf(b?.source_account_id),destination=idOf(b?.destination_account_id),amount=Number(b?.amount),date=text(b?.transfer_date,10),type=text(b?.transfer_type,30)||"transfer",description=text(b?.description,200),observation=text(b?.observation,500);
+      if(!source||!destination||source===destination||!Number.isFinite(amount)||amount<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date))return json({error:"Origem, destino, valor e data válidos são obrigatórios."},400,origin);
+      const owns=await pool.query("select id from financial_accounts where id=any($1::bigint[]) and (owner_id=$2 or owner_id is null)",[[source,destination],userId]);
+      if(owns.rowCount!==2)return json({error:"Conta de origem ou destino não encontrada."},404,origin);
+      const r=await pool.query(`insert into transfers(source_account_id,destination_account_id,amount,transfer_date,transfer_type,description,observation,owner_id) values($1,$2,$3,$4,$5,$6,$7,$8) returning id,source_account_id,destination_account_id,amount,transfer_date,transfer_type,description,observation,created_at`,[source,destination,Math.round(amount*100)/100,date,type,description,observation,userId]);
+      return json(r.rows[0],201,origin);
+    }
+
+    if(request.method==="GET" && path.endsWith("/transfers")) {
+      const rows=await pool.query(`select t.id,t.amount,t.transfer_date,t.transfer_type,t.description,t.observation,t.created_at,s.name source_name,d.name destination_name
+        from transfers t join financial_accounts s on s.id=t.source_account_id join financial_accounts d on d.id=t.destination_account_id
+        where t.owner_id=$1 order by t.transfer_date desc,t.id desc limit 100`,[userId]);
+      return json({transfers:rows.rows},200,origin);
     }
 
     if(request.method==="GET" && path.endsWith("/expenses")) {

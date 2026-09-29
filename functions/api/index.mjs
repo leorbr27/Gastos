@@ -75,7 +75,6 @@ async function ensureSchema() {
     );
     create index if not exists receivables_owner_date_idx on receivables(owner_id,due_date desc);
     create index if not exists receipts_receivable_idx on receipts(receivable_id);
-    create index if not exists receipts_account_idx on receipts(account_id);
     create table if not exists financial_accounts (
       id bigint generated always as identity primary key,
       name text not null unique,
@@ -100,8 +99,27 @@ async function ensureSchema() {
       constraint transfer_accounts_chk check (source_account_id <> destination_account_id)
     );
     alter table receipts add column if not exists account_id bigint references financial_accounts(id) on delete set null;
-        create index if not exists accounts_owner_idx on financial_accounts(owner_id,active);
+        alter table receipts add column if not exists account_id bigint references financial_accounts(id) on delete set null;
+    create index if not exists receipts_account_idx on receipts(account_id);
+    create index if not exists accounts_owner_idx on financial_accounts(owner_id,active);
     create index if not exists transfers_owner_date_idx on transfers(owner_id,transfer_date desc);
+    create table if not exists bank_transactions (
+      id bigint generated always as identity primary key,
+      account_id bigint not null references financial_accounts(id) on delete cascade,
+      transaction_date date not null,
+      description text not null,
+      amount numeric(12,2) not null,
+      external_id text,
+      matched_expense_id bigint references expenses(id) on delete set null,
+      matched_receipt_id bigint references receipts(id) on delete set null,
+      reconciled boolean not null default false,
+      imported_at timestamptz not null default now(),
+      owner_id text,
+      unique(account_id,external_id)
+    );
+    create index if not exists bank_transactions_owner_date_idx on bank_transactions(owner_id,transaction_date desc);
+    create index if not exists bank_transactions_match_idx on bank_transactions(account_id,transaction_date,amount,reconciled);
+
     create table if not exists recurring_rules (
       id bigint generated always as identity primary key,
       rule_type text not null,
@@ -181,7 +199,7 @@ export default async function handler(request) {
 
     if(request.method==="GET" && path==="/auth-config") return json({auth_url:AUTH_BASE},200,origin);
 
-    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.5",schema_version:7,auth:true,pagination:true,receivables:true,partial_receipts:true,accounts:true,transfers:true},200,origin);
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.6",schema_version:8,auth:true,pagination:true,receivables:true,partial_receipts:true,accounts:true,transfers:true},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards]=await Promise.all([
@@ -261,6 +279,38 @@ export default async function handler(request) {
       if(ruleType==="expense"&&cardId===null&&categoryId===null)return json({error:"Informe ao menos uma categoria ou um cartão para a despesa recorrente."},400,origin);
       const r=await pool.query("insert into recurring_rules(rule_type,description,amount,category_id,card_id,first_date,next_date,owner_id) values($1,$2,$3,$4,$5,$6,$6,$7) returning id,rule_type,description,amount,category_id,card_id,first_date,next_date,active,created_at",[ruleType,description,Math.round(amount*100)/100,categoryId,ruleType==="expense"?cardId:null,firstDate,userId]);
       return json(r.rows[0],201,origin);
+    }
+
+    if(request.method==="GET" && path.endsWith("/reconciliation")) {
+      const accountId=idOf(url.searchParams.get("account_id"));
+      if(!accountId)return json({error:"account_id é obrigatório."},400,origin);
+      const rows=await pool.query(`select id,transaction_date,description,amount,external_id,reconciled,matched_expense_id,matched_receipt_id,imported_at from bank_transactions where account_id=$1 and (owner_id=$2 or owner_id is null) order by transaction_date desc,id desc limit 500`,[accountId,userId]);
+      return json({transactions:rows.rows},200,origin);
+    }
+
+    if(request.method==="POST" && path.endsWith("/reconciliation/import")) {
+      const b=await request.json().catch(()=>null),accountId=idOf(b?.account_id),items=Array.isArray(b?.transactions)?b.transactions.slice(0,2000):[];
+      if(!accountId||!items.length)return json({error:"Conta e transações são obrigatórias."},400,origin);
+      const account=await pool.query("select id,account_type from financial_accounts where id=$1 and (owner_id=$2 or owner_id is null)",[accountId,userId]);
+      if(!account.rowCount||account.rows[0].account_type==="credit_card")return json({error:"A conciliação CSV deve usar uma conta bancária ou dinheiro."},400,origin);
+      let imported=0,matched=0,skipped=0;
+      const client=await pool.connect();
+      try{
+        await client.query("begin");
+        for(const item of items){
+          const d=text(item?.transaction_date,10),desc=text(item?.description,300),external=text(item?.external_id,200)||null,amount=Number(item?.amount);
+          if(!desc||!Number.isFinite(amount)||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(d)){skipped++;continue}
+          if(external&&(await client.query("select 1 from bank_transactions where account_id=$1 and external_id=$2",[accountId,external])).rowCount){skipped++;continue}
+          const cand=amount<0
+            ? await client.query("select id from expenses where (owner_id=$1 or owner_id is null) and amount=$2 and expense_date between ($3::date-3) and ($3::date+3) and card_id is null order by abs(expense_date-$3::date),id limit 1",[userId,Math.abs(amount),d])
+            : await client.query("select p.id from receipts p join receivables r on r.id=p.receivable_id where (p.owner_id=$1 or p.owner_id is null) and p.amount=$2 and p.received_date between ($3::date-3) and ($3::date+3) order by abs(p.received_date-$3::date),p.id limit 1",[userId,Math.abs(amount),d]);
+          const expId=amount<0?(cand.rows[0]?.id||null):null,recId=amount>=0?(cand.rows[0]?.id||null):null;
+          await client.query("insert into bank_transactions(account_id,transaction_date,description,amount,external_id,matched_expense_id,matched_receipt_id,reconciled,owner_id) values($1,$2,$3,$4,$5,$6,$7,$8,$9)",[accountId,d,desc,Math.round(amount*100)/100,external,expId,recId,!!(expId||recId),userId]);
+          imported++;if(expId||recId)matched++;
+        }
+        await client.query("commit");
+      }catch(e){await client.query("rollback");throw e}finally{client.release()}
+      return json({imported,matched,unmatched:imported-matched,skipped},201,origin);
     }
 
     if(request.method==="GET" && path.endsWith("/cash-flow")) {
@@ -423,15 +473,22 @@ export default async function handler(request) {
       const b=await request.json().catch(()=>null);
       const description=text(b?.description,200), amount=Number(b?.amount), observation=text(b?.observation,500), installmentTotal=Math.max(1,Number(b?.installment_total||1));
       const categoryId=idOf(b?.category_id), cardId=idOf(b?.card_id), expenseDate=text(b?.expense_date,10);
-      if(!description || !Number.isFinite(amount) || amount<=0 || !Number.isInteger(installmentTotal) || installmentTotal>48 || !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate))
+      if(!description || !Number.isFinite(amount) || amount<=0 || !Number.isInteger(installmentTotal) || installmentTotal>120 || !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate))
         return json({error:"Descrição, valor, data e parcelamento válidos são obrigatórios."},400,origin);
-      const r=await pool.query(`insert into expenses(description,amount,category_id,card_id,expense_date,installment_total,installment_number,invoice_month,observation,owner_id)
-        select $1,$2,$3,$4,(($5::date)+(gs||' months')::interval)::date,$6,gs+1,
-          case when $4 is not null then (date_trunc('month',(($5::date)+(gs||' months')::interval)::date)+case when extract(day from (($5::date)+(gs||' months')::interval)::date)>coalesce((select closing_day from cards where id=$4),31) then interval '1 month' else interval '0 month' end)::date else null end,
-          $7,$8 from generate_series(0,$6-1) gs
-        returning id,description,amount,category_id,card_id,expense_date,installment_total,installment_number,invoice_month,observation,created_at,updated_at`,
-        [description,Math.round(amount*100)/100,categoryId,cardId,expenseDate,installmentTotal,observation,userId]);
-      const rows=await expenseQuery("where e.owner_id=$1 and e.id=any($2::bigint[])",[userId,r.rows.map(x=>x.id)]);
+      const totalCents=Math.round(amount*100),baseCents=Math.floor(totalCents/installmentTotal),remainder=totalCents-baseCents*installmentTotal;
+      const client=await pool.connect(),ids=[];
+      try{
+        await client.query("begin");
+        for(let n=1;n<=installmentTotal;n++){
+          const cents=baseCents+(n>installmentTotal-remainder?1:0);
+          const d=(await client.query("select (($1::date)+(($2-1)||' months')::interval)::date d",[expenseDate,n])).rows[0].d;
+          const inv=cardId?(await client.query("select (date_trunc('month',$1::date)+case when extract(day from $1::date)>coalesce(closing_day,31) then interval '1 month' else interval '0 month' end)::date invoice_month from cards where id=$2",[d,cardId])).rows[0]?.invoice_month:null;
+          const row=await client.query("insert into expenses(description,amount,category_id,card_id,expense_date,installment_total,installment_number,invoice_month,observation,owner_id) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id",[description,cents/100,categoryId,cardId,d,installmentTotal,n,inv,observation,userId]);
+          ids.push(row.rows[0].id);
+        }
+        await client.query("commit");
+      }catch(e){await client.query("rollback");throw e}finally{client.release()}
+      const rows=await expenseQuery("where e.owner_id=$1 and e.id=any($2::bigint[])",[userId,ids]);
       return json({created:rows},201,origin);
     }
 

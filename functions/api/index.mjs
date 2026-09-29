@@ -102,6 +102,21 @@ async function ensureSchema() {
     alter table receipts add column if not exists account_id bigint references financial_accounts(id) on delete set null;
         create index if not exists accounts_owner_idx on financial_accounts(owner_id,active);
     create index if not exists transfers_owner_date_idx on transfers(owner_id,transfer_date desc);
+    create table if not exists recurring_rules (
+      id bigint generated always as identity primary key,
+      rule_type text not null,
+      description text not null,
+      amount numeric(12,2) not null check (amount > 0),
+      category_id bigint references categories(id) on delete set null,
+      card_id bigint references cards(id) on delete set null,
+      first_date date not null,
+      next_date date not null,
+      active boolean not null default true,
+      created_at timestamptz not null default now(),
+      owner_id text,
+      constraint recurring_type_chk check (rule_type in ('expense','receivable'))
+    );
+    create index if not exists recurring_owner_next_idx on recurring_rules(owner_id,next_date,active);
     insert into categories(name) values
       ('Alimentação'),('Carro'),('Contas da casa'),('Saúde'),('Lazer'),
       ('Alimentação'),('Transporte'),('Contas da casa'),('Saúde'),('Lazer'),
@@ -166,7 +181,7 @@ export default async function handler(request) {
 
     if(request.method==="GET" && path==="/auth-config") return json({auth_url:AUTH_BASE},200,origin);
 
-    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.4",schema_version:6,auth:true,pagination:true,receivables:true,partial_receipts:true,accounts:true,transfers:true},200,origin);
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.5",schema_version:7,auth:true,pagination:true,receivables:true,partial_receipts:true,accounts:true,transfers:true},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards]=await Promise.all([
@@ -204,6 +219,47 @@ export default async function handler(request) {
       const sum=await pool.query("select coalesce(sum(amount),0) total from receipts where receivable_id=$1",[id]);
       if(Number(sum.rows[0].total)+amount>Number(owner.rows[0].expected_amount)+0.009)return json({error:"O valor recebido não pode ultrapassar o valor previsto."},400,origin);
       const r=await pool.query("insert into receipts(receivable_id,amount,received_date,observation,owner_id,account_id) values($1,$2,$3,$4,$5,$6) returning id,receivable_id,amount,received_date,observation,account_id,created_at",[id,Math.round(amount*100)/100,receivedDate,observation,userId,accountId]);
+      return json(r.rows[0],201,origin);
+    }
+
+    if(request.method==="GET" && path.endsWith("/recurring")) {
+      const rows=await pool.query("select id,rule_type,description,amount,category_id,card_id,first_date,next_date,active,created_at from recurring_rules where owner_id=$1 order by next_date,id",[userId]);
+      return json({rules:rows.rows},200,origin);
+    }
+
+    if(request.method==="POST" && path.endsWith("/recurring/generate")) {
+      const days=Math.min(365,Math.max(1,Number(url.searchParams.get("days")||90)||90));
+      const horizon=(await pool.query("select current_date+$1::int d",[days])).rows[0].d;
+      const client=await pool.connect();
+      let created=0;
+      try{
+        await client.query("begin");
+        const rules=(await client.query("select * from recurring_rules where owner_id=$1 and active=true and next_date<=$2 for update",[userId,horizon])).rows;
+        for(const rule of rules){
+          let next=new Date(String(rule.next_date).slice(0,10)+"T00:00:00Z");
+          while(next.toISOString().slice(0,10)<=String(horizon).slice(0,10)){
+            const d=next.toISOString().slice(0,10);
+            if(rule.rule_type==="expense"){
+              await client.query(`insert into expenses(description,amount,category_id,card_id,expense_date,installment_total,installment_number,invoice_month,owner_id)
+                values($1,$2,$3,$4,$5,1,1,case when $4 is not null then (date_trunc('month',$5::date)+case when extract(day from $5::date)>coalesce((select closing_day from cards where id=$4),31) then interval '1 month' else interval '0 month' end)::date else null end,$6)`,[rule.description,rule.amount,rule.category_id,rule.card_id,d,userId]);
+            }else{
+              await client.query("insert into receivables(description,expected_amount,due_date,category,receiving_method,observation,owner_id) values($1,$2,$3,'Outros',null,'Gerado por recorrência',$4)",[rule.description,rule.amount,d,userId]);
+            }
+            created++;
+            next=new Date(Date.UTC(next.getUTCFullYear(),next.getUTCMonth()+1,next.getUTCDate()));
+          }
+          await client.query("update recurring_rules set next_date=$1 where id=$2",[next.toISOString().slice(0,10),rule.id]);
+        }
+        await client.query("commit");
+      }catch(e){await client.query("rollback");throw e}finally{client.release()}
+      return json({created},200,origin);
+    }
+
+    if(request.method==="POST" && path.endsWith("/recurring")) {
+      const b=await request.json().catch(()=>null),ruleType=text(b?.rule_type,20),description=text(b?.description,200),amount=Number(b?.amount),firstDate=text(b?.first_date,10),categoryId=idOf(b?.category_id),cardId=idOf(b?.card_id);
+      if(!["expense","receivable"].includes(ruleType)||!description||!Number.isFinite(amount)||amount<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(firstDate))return json({error:"Tipo, descrição, valor e primeira data válidos são obrigatórios."},400,origin);
+      if(ruleType==="expense"&&cardId===null&&categoryId===null)return json({error:"Informe ao menos uma categoria ou um cartão para a despesa recorrente."},400,origin);
+      const r=await pool.query("insert into recurring_rules(rule_type,description,amount,category_id,card_id,first_date,next_date,owner_id) values($1,$2,$3,$4,$5,$6,$6,$7) returning id,rule_type,description,amount,category_id,card_id,first_date,next_date,active,created_at",[ruleType,description,Math.round(amount*100)/100,categoryId,ruleType==="expense"?cardId:null,firstDate,userId]);
       return json(r.rows[0],201,origin);
     }
 

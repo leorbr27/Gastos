@@ -25,10 +25,13 @@ async function ensureSchema() {
       active boolean not null default true,
       closing_day smallint,
       due_day smallint,
+      credit_limit numeric(12,2) not null default 0,
       created_at timestamptz not null default now(),
       constraint cards_closing_day_chk check (closing_day is null or closing_day between 1 and 31),
       constraint cards_due_day_chk check (due_day is null or due_day between 1 and 31)
     );
+    alter table cards add column if not exists credit_limit numeric(12,2) not null default 0;
+    alter table receipts add column if not exists account_id bigint references financial_accounts(id) on delete set null;
     create table if not exists expenses (
       id bigint generated always as identity primary key,
       description text not null,
@@ -73,6 +76,7 @@ async function ensureSchema() {
     );
     create index if not exists receivables_owner_date_idx on receivables(owner_id,due_date desc);
     create index if not exists receipts_receivable_idx on receipts(receivable_id);
+    create index if not exists receipts_account_idx on receipts(account_id);
     create table if not exists financial_accounts (
       id bigint generated always as identity primary key,
       name text not null unique,
@@ -107,6 +111,8 @@ async function ensureSchema() {
 
     await pool.query(`update expenses set category_id=(select id from categories where name='Carro' limit 1) where category_id=(select id from categories where name='Transporte' limit 1);`);
     await pool.query(`update categories set active=false where name='Transporte';`);
+    update expenses e set invoice_month=(date_trunc('month',e.expense_date)+case when extract(day from e.expense_date)>coalesce(c.closing_day,31) then interval '1 month' else interval '0 month' end)::date
+      from cards c where c.id=e.card_id and e.invoice_month is null;
     insert into cards(name) values
       ('Pix'),('Dinheiro'),('Cartão de débito'),('Cartão de crédito')
     on conflict(name) do nothing;
@@ -155,17 +161,17 @@ export default async function handler(request) {
     const isPublicBootstrap=request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"));
     const isPublicCreateExpense=request.method==="POST" && path.endsWith("/expenses");
     const isPublicCreateCard=request.method==="POST" && path.endsWith("/cards");
-    const userId=(path==="/auth-config" || isPublicBootstrap || isPublicCreateExpense || isPublicCreateCard || (request.method==="POST" && (path.endsWith("/receivables") || /\/receivables\/\d+\/receipts$/.test(path))))?null:await requireUser(request);
+    const userId=(path==="/auth-config" || isPublicBootstrap || isPublicCreateExpense || isPublicCreateCard || (request.method==="POST" && path.endsWith("/receivables")))?null:await requireUser(request);
     if(userId) await pool.query("update expenses set owner_id=$1 where owner_id is null",[userId]);
 
     if(request.method==="GET" && path==="/auth-config") return json({auth_url:AUTH_BASE},200,origin);
 
-    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.3",schema_version:5,auth:true,pagination:true,receivables:true,partial_receipts:true,accounts:true,transfers:true},200,origin);
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.4",schema_version:6,auth:true,pagination:true,receivables:true,partial_receipts:true,accounts:true,transfers:true},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards]=await Promise.all([
         pool.query("select id,name from categories where active=true order by name"),
-        pool.query("select id,name,closing_day,due_day from cards where active=true order by case when name='Pix' then 0 when name='Dinheiro' then 1 else 2 end,name"),
+        pool.query("select id,name,closing_day,due_day,credit_limit from cards where active=true order by case when name='Pix' then 0 when name='Dinheiro' then 1 else 2 end,name"),
       ]);
       return json({categories:categories.rows,cards:cards.rows},200,origin);
     }
@@ -200,14 +206,22 @@ export default async function handler(request) {
     if(request.method==="GET" && path.endsWith("/accounts")) {
       const rows=await pool.query(`select a.id,a.name,a.account_type,a.opening_balance,a.card_id,a.created_at,
         coalesce((select sum(case when t.source_account_id=a.id then -t.amount when t.destination_account_id=a.id then t.amount else 0 end) from transfers t where t.owner_id=$1),0) transfer_net,
-        coalesce((select sum(e.amount) from expenses e where e.owner_id=$1 and e.card_id=a.card_id),0) card_expenses
+        coalesce((select sum(r.amount) from receipts r where r.owner_id=$1 and r.account_id=a.id),0) receipt_net,
+        coalesce((select sum(e.amount) from expenses e where e.owner_id=$1 and e.card_id=a.card_id and e.expense_date<=current_date),0) card_expenses,
+        coalesce((select sum(t.amount) from transfers t where t.owner_id=$1 and t.destination_account_id=a.id and t.transfer_type='credit_card_payment'),0) card_payments
         from financial_accounts a where a.active=true and (a.owner_id=$1 or a.owner_id is null) order by a.name`,[userId]);
-      return json({accounts:rows.rows.map(x=>({...x,balance:Number(x.account_type==="credit_card"?Number(x.opening_balance)-Number(x.card_expenses)+Number(x.transfer_net):Number(x.opening_balance)+Number(x.transfer_net)),debt:Number(x.account_type==="credit_card"?Math.max(0,Number(x.card_expenses)-Number(x.transfer_net)):0)}))},200,origin);
+      return json({accounts:rows.rows.map(x=>{
+        const isCard=x.account_type==="credit_card";
+        const debt=isCard?Math.max(0,Number(x.opening_balance)+Number(x.card_expenses)-Number(x.card_payments)):0;
+        return {...x,balance:isCard?-debt:Number(x.opening_balance)+Number(x.transfer_net)+Number(x.receipt_net),debt};
+      })},200,origin);
     }
 
     if(request.method==="POST" && path.endsWith("/accounts")) {
       const b=await request.json().catch(()=>null),name=text(b?.name,100),type=text(b?.account_type,30)||"bank",opening=Number(b?.opening_balance||0),cardId=idOf(b?.card_id);
-      if(!name||!["bank","cash","credit_card"].includes(type)||!Number.isFinite(opening))return json({error:"Nome, tipo e saldo inicial válidos são obrigatórios."},400,origin);
+      if(!name||!["bank","cash","credit_card"].includes(type)||!Number.isFinite(opening)||opening<0)return json({error:"Nome, tipo e saldo inicial válidos são obrigatórios."},400,origin);
+      if(type==="credit_card"&&!cardId)return json({error:"Cartão de crédito deve estar vinculado a um cartão cadastrado."},400,origin);
+      if(type!=="credit_card"&&cardId)return json({error:"Somente contas do tipo cartão de crédito podem ter cartão vinculado."},400,origin);
       const r=await pool.query(`insert into financial_accounts(name,account_type,opening_balance,card_id,owner_id) values($1,$2,$3,$4,$5) returning id,name,account_type,opening_balance,card_id,created_at`,[name,type,Math.round(opening*100)/100,cardId,userId]);
       return json({...r.rows[0],balance:Number(r.rows[0].opening_balance)},201,origin);
     }
@@ -215,8 +229,12 @@ export default async function handler(request) {
     if(request.method==="POST" && path.endsWith("/transfers")) {
       const b=await request.json().catch(()=>null),source=idOf(b?.source_account_id),destination=idOf(b?.destination_account_id),amount=Number(b?.amount),date=text(b?.transfer_date,10),type=text(b?.transfer_type,30)||"transfer",description=text(b?.description,200),observation=text(b?.observation,500);
       if(!source||!destination||source===destination||!Number.isFinite(amount)||amount<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(date))return json({error:"Origem, destino, valor e data válidos são obrigatórios."},400,origin);
-      const owns=await pool.query("select id from financial_accounts where id=any($1::bigint[]) and (owner_id=$2 or owner_id is null)",[[source,destination],userId]);
+      const owns=await pool.query("select id,account_type from financial_accounts where id=any($1::bigint[]) and (owner_id=$2 or owner_id is null)",[[source,destination],userId]);
       if(owns.rowCount!==2)return json({error:"Conta de origem ou destino não encontrada."},404,origin);
+      const destinationAccount=owns.rows.find(x=>Number(x.id)===destination);
+      const sourceAccount=owns.rows.find(x=>Number(x.id)===source);
+      if(type==="credit_card_payment" && destinationAccount?.account_type!=="credit_card")return json({error:"Pagamento de fatura deve ter como destino uma conta de cartão de crédito."},400,origin);
+      if(type==="credit_card_payment" && sourceAccount?.account_type==="credit_card")return json({error:"O pagamento da fatura deve sair de uma conta bancária ou dinheiro."},400,origin);
       const r=await pool.query(`insert into transfers(source_account_id,destination_account_id,amount,transfer_date,transfer_type,description,observation,owner_id) values($1,$2,$3,$4,$5,$6,$7,$8) returning id,source_account_id,destination_account_id,amount,transfer_date,transfer_type,description,observation,created_at`,[source,destination,Math.round(amount*100)/100,date,type,description,observation,userId]);
       return json(r.rows[0],201,origin);
     }
@@ -250,23 +268,64 @@ export default async function handler(request) {
     }
 
     if(request.method==="POST" && path.endsWith("/cards")) {
-      const b=await request.json().catch(()=>null), name=text(b?.name,100);
-      if(!name) return json({error:"Nome do meio de pagamento é obrigatório."},400,origin);
-      const r=await pool.query(`insert into cards(name) values($1) on conflict(name) do update set active=true
-        returning id,name,closing_day,due_day`,[name]);
+      const b=await request.json().catch(()=>null), name=text(b?.name,100),closing=idOf(b?.closing_day),due=idOf(b?.due_day),limit=Number(b?.credit_limit||0);
+      if(!name||!Number.isFinite(limit)||limit<0||(closing!==null&&(closing<1||closing>31))||(due!==null&&(due<1||due>31)))return json({error:"Nome, limite, fechamento e vencimento válidos são obrigatórios."},400,origin);
+      const r=await pool.query(`insert into cards(name,closing_day,due_day,credit_limit) values($1,$2,$3,$4)
+        on conflict(name) do update set active=true,closing_day=coalesce(excluded.closing_day,cards.closing_day),due_day=coalesce(excluded.due_day,cards.due_day),credit_limit=excluded.credit_limit
+        returning id,name,closing_day,due_day,credit_limit`,[name,closing,due,Math.round(limit*100)/100]);
       return json(r.rows[0],201,origin);
+    }
+
+    if(request.method==="PUT" && /\/cards\/?\d+$/.test(path)) {
+      const id=Number(path.match(/(\d+)$/)[1]),b=await request.json().catch(()=>null),name=text(b?.name,100),closing=idOf(b?.closing_day),due=idOf(b?.due_day),limit=Number(b?.credit_limit||0);
+      if(!name||!Number.isFinite(limit)||limit<0||(closing!==null&&(closing<1||closing>31))||(due!==null&&(due<1||due>31)))return json({error:"Nome, limite, fechamento e vencimento válidos são obrigatórios."},400,origin);
+      const r=await pool.query(`update cards set name=$1,closing_day=$2,due_day=$3,credit_limit=$4 where id=$5 returning id,name,closing_day,due_day,credit_limit`,[name,closing,due,Math.round(limit*100)/100,id]);
+      if(!r.rowCount)return json({error:"Cartão não encontrado."},404,origin);
+      return json(r.rows[0],200,origin);
+    }
+
+    if(request.method==="GET" && path.endsWith("/card-statements")) {
+      const cardId=idOf(url.searchParams.get("card_id"));
+      const month=text(url.searchParams.get("month"),7);
+      if(!cardId)return json({error:"card_id é obrigatório."},400,origin);
+      const card=await pool.query("select id,name,closing_day,due_day,credit_limit from cards where id=$1",[cardId]);
+      if(!card.rowCount)return json({error:"Cartão não encontrado."},404,origin);
+      const c=card.rows[0];
+      let statementMonth=month&&/^\d{4}-\d{2}$/.test(month)?month:null;
+      if(!statementMonth){
+        const d=new Date(),base=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()));
+        const day=base.getUTCDate();
+        let y=base.getUTCFullYear(),m=base.getUTCMonth();
+        if(Number(c.closing_day)&&day>Number(c.closing_day)){m++;if(m>11){m=0;y++;}}
+        statementMonth=y+"-"+String(m+1).padStart(2,"0");
+      }
+      const start=statementMonth+"-01";
+      const period=await pool.query(`select
+        (date_trunc('month',$1::date)-interval '1 month'+make_interval(days=>coalesce($2,1)))::date period_start,
+        (date_trunc('month',$1::date)+make_interval(days=>coalesce($2,1)-1))::date period_end,
+        (date_trunc('month',$1::date)+make_interval(days=>case when coalesce($3,1)<=coalesce($2,1) then 1 else 0 end months)+make_interval(days=>coalesce($3,1)-1))::date due_date`,[start,c.closing_day,c.due_day]);
+      const p=period.rows[0];
+      const expensesRows=await pool.query("select id,description,amount,expense_date,installment_total,installment_number from expenses where card_id=$1 and invoice_month=$2 and expense_date<=current_date order by expense_date,id",[cardId,start]);
+      const account=await pool.query("select id from financial_accounts where card_id=$1 and account_type='credit_card' and active=true limit 1",[cardId]);
+      let paid=0;
+      if(account.rowCount) {
+        const pay=await pool.query("select coalesce(sum(amount),0) total from transfers where destination_account_id=$1 and transfer_type='credit_card_payment' and transfer_date>=$2 and transfer_date<=$3",[account.rows[0].id,p.period_end,p.due_date]);
+        paid=Number(pay.rows[0].total);
+      }
+      const total=expensesRows.rows.reduce((a,x)=>a+Number(x.amount),0);
+      return json({card:c,statement:{month:statementMonth,period_start:p.period_start,period_end:p.period_end,due_date:p.due_date,total,paid,remaining:Math.max(0,total-paid),status:paid>=total&&total>0?"Recebida":paid>0?"Parcial":"Pendente",expenses:expensesRows.rows}},200,origin);
     }
 
     if(request.method==="PUT" && /\/expenses\/?\d+$/.test(path)) {
       const match=path.match(/(\d+)$/), expenseId=Number(match[1]);
       const b=await request.json().catch(()=>null);
-      const description=text(b?.description,200), amount=Number(b?.amount), observation=text(b?.observation,500);
+      const description=text(b?.description,200), amount=Number(b?.amount), observation=text(b?.observation,500), installmentTotal=Math.max(1,Number(b?.installment_total||1)), installmentNumber=Math.max(1,Number(b?.installment_number||1));
       const categoryId=idOf(b?.category_id), cardId=idOf(b?.card_id), expenseDate=text(b?.expense_date,10);
-      if(!description || !Number.isFinite(amount) || amount<=0 || !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate))
-        return json({error:"Descrição, valor e data válidos são obrigatórios."},400,origin);
-      const r=await pool.query(`update expenses set description=$1,amount=$2,category_id=$3,card_id=$4,expense_date=$5,observation=$6,updated_at=now()
-        where id=$7 and (owner_id=$8 or owner_id is null) returning id,description,amount,category_id,card_id,expense_date,observation,created_at,updated_at`,
-        [description,Math.round(amount*100)/100,categoryId,cardId,expenseDate,observation,expenseId,userId]);
+      if(!description || !Number.isFinite(amount) || amount<=0 || installmentTotal>1 || installmentNumber>installmentTotal || !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate))
+        return json({error:"Descrição, valor e data válidos são obrigatórios. Parcelamento não pode ser alterado pela edição individual."},400,origin);
+      const r=await pool.query(`update expenses set description=$1,amount=$2,category_id=$3,card_id=$4,expense_date=$5,installment_number=$6,invoice_month=case when $4 is not null then (date_trunc('month',$5::date)+case when extract(day from $5::date)>coalesce((select closing_day from cards where id=$4),31) then interval '1 month' else interval '0 month' end)::date else null end,observation=$7,updated_at=now()
+        where id=$8 and (owner_id=$9 or owner_id is null) returning id,description,amount,category_id,card_id,expense_date,observation,installment_total,installment_number,invoice_month,created_at,updated_at`,
+        [description,Math.round(amount*100)/100,categoryId,cardId,expenseDate,installmentNumber,observation,expenseId,userId]);
       if(!r.rowCount) return json({error:"Gasto não encontrado."},404,origin);
       const rows=await expenseQuery("where e.id=$1 and (e.owner_id=$2 or e.owner_id is null)",[expenseId,userId]);
       return json(rows[0],200,origin);
@@ -281,15 +340,18 @@ export default async function handler(request) {
 
     if(request.method==="POST" && path.endsWith("/expenses")) {
       const b=await request.json().catch(()=>null);
-      const description=text(b?.description,200), amount=Number(b?.amount), observation=text(b?.observation,500);
+      const description=text(b?.description,200), amount=Number(b?.amount), observation=text(b?.observation,500), installmentTotal=Math.max(1,Number(b?.installment_total||1));
       const categoryId=idOf(b?.category_id), cardId=idOf(b?.card_id), expenseDate=text(b?.expense_date,10);
-      if(!description || !Number.isFinite(amount) || amount<=0 || !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate))
-        return json({error:"Descrição, valor e data válidos são obrigatórios."},400,origin);
-      const r=await pool.query(`insert into expenses(description,amount,category_id,card_id,expense_date,observation,owner_id)
-        values($1,$2,$3,$4,$5,$6,$7) returning id,description,amount,category_id,card_id,expense_date,observation,created_at,updated_at`,
-        [description,Math.round(amount*100)/100,categoryId,cardId,expenseDate,observation,userId]);
-      const rows=await expenseQuery("where e.id=$1 and e.owner_id=$2",[r.rows[0].id,userId]);
-      return json(rows[0],201,origin);
+      if(!description || !Number.isFinite(amount) || amount<=0 || !Number.isInteger(installmentTotal) || installmentTotal>48 || !/^\d{4}-\d{2}-\d{2}$/.test(expenseDate))
+        return json({error:"Descrição, valor, data e parcelamento válidos são obrigatórios."},400,origin);
+      const r=await pool.query(`insert into expenses(description,amount,category_id,card_id,expense_date,installment_total,installment_number,invoice_month,observation,owner_id)
+        select $1,$2,$3,$4,(($5::date)+(gs||' months')::interval)::date,$6,gs+1,
+          case when $4 is not null then (date_trunc('month',(($5::date)+(gs||' months')::interval)::date)+case when extract(day from (($5::date)+(gs||' months')::interval)::date)>coalesce((select closing_day from cards where id=$4),31) then interval '1 month' else interval '0 month' end)::date else null end,
+          $7,$8 from generate_series(0,$6-1) gs
+        returning id,description,amount,category_id,card_id,expense_date,installment_total,installment_number,invoice_month,observation,created_at,updated_at`,
+        [description,Math.round(amount*100)/100,categoryId,cardId,expenseDate,installmentTotal,observation,userId]);
+      const rows=await expenseQuery("where e.owner_id=$1 and e.id=any($2::bigint[])",[userId,r.rows.map(x=>x.id)]);
+      return json({created:rows},201,origin);
     }
 
     return json({error:"Endpoint não encontrado."},404,origin);

@@ -201,29 +201,48 @@ function renderReceivables(){
   $("listaRecebimentos").innerHTML=receivables.length?receivables.map(x=>{
     const expected=Number(x.expected_amount||0),got=Number(x.received_amount||0),pending=Math.max(0,expected-got),status=pending<=0?"Recebido":got>0?"Parcial":String(x.due_date)<isoToday()?"Atrasado":"Pendente";
     const parcel=x.installment_total>1?' · Parcela '+x.installment_number+'/'+x.installment_total:"";
-    const receiptControl=pending>0?'<select id="recebConta_'+x.id+'" style="height:36px;width:min(220px,100%)">'+accountOptions(x.account_id)+'</select><button class="ghost" style="height:36px;padding:0 10px;font-size:12px" onclick="registrarRecebimento('+x.id+','+pending+')">Registrar recebimento</button>':'';
-    return '<div class="item"><div><div class="desc">'+esc(x.description)+'</div><div class="meta">Previsto: '+formatDate(x.due_date)+' · '+esc(x.category||"Outros")+' · '+status+parcel+'</div><div class="observation">Recebido: '+brl(got)+' · A receber: '+brl(pending)+(x.account_name?' · Destino: '+esc(x.account_name):"")+'</div></div><strong class="amount">'+brl(expected)+'</strong><div class="item-actions"><span class="payment">💰 '+esc(x.receiving_method||"Meio não informado")+'</span>'+receiptControl+'<button class="edit" title="Alterar recebimento" onclick="editarRecebimento('+x.id+')">✏️</button></div></div>'
+    const whatsapp=String(x.due_date)<isoToday()&&pending>0?'<button class="ghost" style="height:36px;padding:0 10px;font-size:12px" onclick="enviarWhatsAppRecebimento('+x.id+')">WhatsApp</button>':"";
+    const receiptControl=pending>0?'<select id="recebConta_'+x.id+'" style="height:36px;width:min(220px,100%)">'+accountOptions(x.account_id)+'</select><button class="ghost" style="height:36px;padding:0 10px;font-size:12px" onclick="registrarRecebimento('+x.id+','+pending+',true)">Receber parcial</button><button class="secondary" style="height:36px;padding:0 10px;font-size:12px" onclick="registrarRecebimento('+x.id+','+pending+',false)">Receber total</button>':'';
+    return '<div class="item"><div><div class="desc">'+esc(x.description)+'</div><div class="meta">Previsto: '+formatDate(x.due_date)+' · '+esc(x.category||"Outros")+' · '+status+parcel+'</div><div class="observation">Recebido: '+brl(got)+' · A receber: '+brl(pending)+(x.account_name?' · Destino: '+esc(x.account_name):"")+'</div></div><strong class="amount">'+brl(expected)+'</strong><div class="item-actions"><span class="payment">💰 '+esc(x.receiving_method||"Meio não informado")+'</span>'+receiptControl+whatsapp+'<button class="edit" title="Alterar recebimento" onclick="editarRecebimento('+x.id+')">✏️</button></div></div>'
   }).join(""):'<div class="empty">Nenhum recebimento previsto para este mês.</div>'
 }
-window.registrarRecebimento=async(id,max)=>{
+window.registrarRecebimento=async(id,max,partial=true)=>{
   const select=$("recebConta_"+id),accountId=Number(select?.value)||null;
   if(!accountId){alert("Selecione a conta de destino antes de registrar o recebimento.");return}
-  const value=prompt("Valor recebido agora:",String(max.toFixed(2)).replace(".",","));
-  if(value===null)return;
-  const amount=Number(value.replace(",", "."));
+  let amount=max;
+  if(partial){
+    const value=prompt("Valor recebido agora (pode ser parcial):",String(max.toFixed(2)).replace(".",","));
+    if(value===null)return;
+    amount=Number(value.replace(",", "."));
+  }
   if(!Number.isFinite(amount)||amount<=0||amount>max+0.009){alert("Informe um valor válido, até o saldo a receber.");return}
   try{
     await api("/receivables/"+id+"/receipts",{method:"POST",body:JSON.stringify({amount,received_date:isoToday(),account_id:accountId})});
-    await loadReceivables();await loadAccounts();await loadCashFlow();await loadDashboard();showStatus("Recebimento registrado e lançado na conta.","ok")
+    await loadReceivables();await loadAccounts();await loadCashFlow();await loadDashboard();showStatus(amount<max-0.009?"Recebimento parcial registrado e lançado na conta.":"Recebimento total registrado e lançado na conta.","ok")
   }catch(e){showStatus(e.message||"Não foi possível registrar o recebimento.")}
 }
+window.enviarWhatsAppRecebimento=async(id)=>{
+  try{
+    const all=await api("/receivables?limit=200&offset=0"),list=Array.isArray(all?.receivables)?all.receivables:[],x=list.find(v=>Number(v.id)===Number(id));
+    if(!x)return;
+    const pending=Math.max(0,Number(x.expected_amount||0)-Number(x.received_amount||0));
+    if(String(x.due_date)>=isoToday()||pending<=0){showStatus("Este recebimento não está em atraso ou já foi quitado.");return}
+    const raw=prompt("Informe o número do WhatsApp com DDD:");
+    if(raw===null)return;
+    let phone=String(raw).replace(/\D/g,"");
+    if(phone.length===10||phone.length===11)phone="55"+phone;
+    if(phone.length<12){alert("Informe um número válido com DDD.");return}
+    const message="Olá! Passando para lembrar do recebimento de "+x.description+", no valor pendente de "+brl(pending)+", com vencimento em "+formatDate(x.due_date)+". Podemos combinar o pagamento?";
+    window.open("https://wa.me/"+phone+"?text="+encodeURIComponent(message),"_blank");
+  }catch(e){showStatus(e.message||"Não foi possível preparar a mensagem do WhatsApp.")}
+};
 let editingReceivableId=null,editingReceivableAll=false;
 window.editarRecebimento=async(id)=>{
   try{
     const all=await api("/receivables?limit=200&offset=0"),list=Array.isArray(all?.receivables)?all.receivables:[],x=list.find(v=>Number(v.id)===Number(id));
     if(!x){showStatus("Recebimento não encontrado.");return}
     let group=list.filter(v=>x.installment_group&&v.installment_group===x.installment_group);
-    editingReceivableAll=group.length>1&&confirm("Este recebimento faz parte de "+group.length+" parcelas. Deseja alterar todas as parcelas?");
+    editingReceivableAll=group.length>1&&confirm("Este recebimento faz parte de "+group.length+" parcelas.\n\nOK = alterar TODAS as parcelas\nCancelar = alterar SOMENTE esta parcela");
     editingReceivableId=x.id;
     $("recebimentoDescricao").value=String(x.description||"").replace(/ · \d+\/\d+$/,"");
     $("recebimentoValor").value=editingReceivableAll?group.reduce((sum,v)=>sum+Number(v.expected_amount||0),0).toFixed(2):Number(x.expected_amount).toFixed(2);
@@ -345,7 +364,7 @@ $("fPeriodo").onchange=render;$("fCategoria").onchange=render;$("fPagamento").on
 load();
 
 </script>
-<div class="last-update" aria-label="Última atualização"><span id="lastUpdate">Versão 2026.09.29.10 · código: carregando...</span></div>
+<div class="last-update" aria-label="Última atualização"><span id="lastUpdate">Versão 2026.09.29.11 · código: carregando...</span></div>
 <script>
 (async()=>{
   const el=document.getElementById("lastUpdate");

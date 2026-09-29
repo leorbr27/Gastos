@@ -64,6 +64,10 @@ async function ensureSchema() {
       updated_at timestamptz not null default now(),
       owner_id text
     );
+    alter table receivables add column if not exists installment_group text;
+    alter table receivables add column if not exists installment_total smallint not null default 1;
+    alter table receivables add column if not exists installment_number smallint not null default 1;
+    alter table receivables add column if not exists account_id bigint references financial_accounts(id) on delete set null;
     create table if not exists receipts (
       id bigint generated always as identity primary key,
       receivable_id bigint not null references receivables(id) on delete cascade,
@@ -74,6 +78,8 @@ async function ensureSchema() {
       owner_id text
     );
     create index if not exists receivables_owner_date_idx on receivables(owner_id,due_date desc);
+    create index if not exists receivables_installment_group_idx on receivables(installment_group);
+    create index if not exists receivables_account_idx on receivables(account_id);
     create index if not exists receipts_receivable_idx on receipts(receivable_id);
     create table if not exists financial_accounts (
       id bigint generated always as identity primary key,
@@ -138,7 +144,7 @@ async function ensureSchema() {
       ('Alimentação'),('Carro'),('Contas da casa'),('Saúde'),('Lazer'),
       ('Transporte'),
       ('Compras'),('Educação'),('Assinaturas'),('Trabalho'),('Outros'),('Lanches'),
-      ('Empréstimos feitos'),('Empréstimos tomados'),('Impostos e taxas'),('Moto'),('Transporte por aplicativo')
+      ('Empréstimos feitos'),('Empréstimos tomados'),('Impostos e taxas'),('Moto'),('Transporte por aplicativo'),('Conta dividida')
     on conflict(name) do nothing;
 
     update expenses set category_id=(select id from categories where name='Carro' limit 1) where category_id=(select id from categories where name='Transporte' limit 1);
@@ -196,7 +202,7 @@ export default async function handler(request) {
 
     if(request.method==="GET" && path==="/auth-config") return json({auth_url:AUTH_BASE},200,origin);
 
-    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.9",schema_version:11,auth:true,pagination:true,receivables:true,partial_receipts:true,accounts:true,transfers:true,reconciliation_manual:true,auth_required_for_writes:true},200,origin);
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.10",schema_version:12,auth:true,pagination:true,receivables:true,partial_receipts:true,receivable_installments:true,receivable_edit:true,receivable_destination_account:true,accounts:true,transfers:true,reconciliation_manual:true,auth_required_for_writes:true},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards]=await Promise.all([
@@ -207,33 +213,95 @@ export default async function handler(request) {
     }
 
     if(request.method==="GET" && path.endsWith("/receivables")) {
-      const rows=await pool.query(`select r.id,r.description,r.expected_amount,r.due_date,r.category,r.receiving_method,r.observation,r.created_at,r.updated_at,coalesce(sum(p.amount),0)::numeric(12,2) received_amount
-        from receivables r left join receipts p on p.receivable_id=r.id
-        where (r.owner_id=$1 or r.owner_id is null)
-        group by r.id order by r.due_date desc,r.id desc limit ${Math.min(100,Math.max(1,Number(url.searchParams.get("limit")||50)||50))} offset ${Math.max(0,Number(url.searchParams.get("offset")||0)||0)}`,[userId]);
-      return json({receivables:rows.rows},200,origin);
+      const month=text(url.searchParams.get("month"),7);
+      const where=["(r.owner_id=$1 or r.owner_id is null)"];
+      const params=[userId];
+      if(month && /^\\d{4}-\\d{2}$/.test(month)){params.push(month+"-01");where.push(`r.due_date >= $${params.length}::date and r.due_date < ($${params.length}::date + interval '1 month')`)}
+      const limit=Math.min(200,Math.max(1,Number(url.searchParams.get("limit")||100)||100));
+      const offset=Math.max(0,Number(url.searchParams.get("offset")||0)||0);
+      const rows=await pool.query(`select r.id,r.description,r.expected_amount,r.due_date,r.category,r.receiving_method,r.observation,r.created_at,r.updated_at,r.installment_group,r.installment_total,r.installment_number,r.account_id,a.name account_name,
+        coalesce(sum(p.amount),0)::numeric(12,2) received_amount,count(p.id)::int receipt_count,max(p.received_date) last_received_date
+        from receivables r left join receipts p on p.receivable_id=r.id left join financial_accounts a on a.id=r.account_id
+        where ${where.join(" and ")}
+        group by r.id,a.name order by r.due_date asc,r.installment_number asc,r.id asc limit ${limit} offset ${offset}`,params);
+      const count=await pool.query(`select count(*)::int total from receivables r where ${where.join(" and ")}`,params);
+      return json({receivables:rows.rows,total:count.rows[0].total,limit,offset},200,origin);
     }
 
     if(request.method==="POST" && path.endsWith("/receivables")) {
       const b=await request.json().catch(()=>null);
-      const description=text(b?.description,200),expected=Number(b?.expected_amount),due=text(b?.due_date,10),category=text(b?.category,100)||"Outros",method=text(b?.receiving_method,100),observation=text(b?.observation,500);
-      if(!description||!Number.isFinite(expected)||expected<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(due))return json({error:"Descrição, valor e data prevista válidos são obrigatórios."},400,origin);
-      const r=await pool.query(`insert into receivables(description,expected_amount,due_date,category,receiving_method,observation,owner_id) values($1,$2,$3,$4,$5,$6,$7) returning id,description,expected_amount,due_date,category,receiving_method,observation,created_at,updated_at`,[description,Math.round(expected*100)/100,due,category,method,observation,userId]);
-      return json({...r.rows[0],received_amount:0},201,origin);
-    }
-
-    if(request.method==="POST" && /\/receivables\/\d+\/receipts$/.test(path)) {
-      const id=Number(path.match(/(\d+)\/receipts$/)[1]),b=await request.json().catch(()=>null),amount=Number(b?.amount),receivedDate=text(b?.received_date,10)||new Date().toISOString().slice(0,10),observation=text(b?.observation,500),accountId=idOf(b?.account_id);
-      if(!Number.isFinite(amount)||amount<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(receivedDate))return json({error:"Valor e data do recebimento são obrigatórios."},400,origin);
+      const description=text(b?.description,200),expected=Number(b?.expected_amount),due=text(b?.due_date,10),category=text(b?.category,100)||"Outros",method=text(b?.receiving_method,100),observation=text(b?.observation,500),accountId=idOf(b?.account_id);
+      const installmentTotal=Math.max(1,Number(b?.installment_total||1));
+      if(!description||!Number.isFinite(expected)||expected<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(due)||!Number.isInteger(installmentTotal)||installmentTotal>120)return json({error:"Descrição, valor, data e número de parcelas válidos são obrigatórios."},400,origin);
       if(accountId){
         const a=await pool.query("select id,account_type from financial_accounts where id=$1 and (owner_id=$2 or owner_id is null)",[accountId,userId]);
-        if(!a.rowCount||a.rows[0].account_type==="credit_card")return json({error:"Selecione uma conta bancária ou dinheiro para receber o valor."},400,origin);
+        if(!a.rowCount||a.rows[0].account_type==="credit_card")return json({error:"Selecione uma conta bancária ou dinheiro como destino."},400,origin);
       }
-      const owner=await pool.query("select owner_id,expected_amount from receivables where id=$1 and (owner_id=$2 or owner_id is null)",[id,userId]);
+      const totalCents=Math.round(expected*100),base=Math.floor(totalCents/installmentTotal),rest=totalCents-base*installmentTotal;
+      const group=installmentTotal>1?"grp-"+Date.now()+"-"+Math.random().toString(36).slice(2,10):null;
+      const client=await pool.connect(),created=[];
+      try{
+        await client.query("begin");
+        for(let n=1;n<=installmentTotal;n++){
+          const cents=base+(n>installmentTotal-rest?1:0);
+          const d=(await client.query("select ($1::date + make_interval(months => $2::int))::date due",[due,n-1])).rows[0].due;
+          const r=await client.query(`insert into receivables(description,expected_amount,due_date,category,receiving_method,observation,owner_id,installment_group,installment_total,installment_number,account_id)
+            values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+            returning id,description,expected_amount,due_date,category,receiving_method,observation,created_at,updated_at,installment_group,installment_total,installment_number,account_id`,
+            [installmentTotal>1?description+" · "+n+"/"+installmentTotal:description,cents/100,d,category,method,observation,userId,group,installmentTotal,n,accountId]);
+          created.push(r.rows[0]);
+        }
+        await client.query("commit");
+      }catch(e){await client.query("rollback");throw e}finally{client.release()}
+      return json({created},201,origin);
+    }
+
+    if(request.method==="PUT" && /^\\/receivables\\/\\d+$/.test(path)) {
+      const id=Number(path.match(/(\\d+)$/)[1]),b=await request.json().catch(()=>null);
+      const description=text(b?.description,200),expected=Number(b?.expected_amount),due=text(b?.due_date,10),category=text(b?.category,100)||"Outros",method=text(b?.receiving_method,100),observation=text(b?.observation,500),accountId=idOf(b?.account_id),applyAll=!!b?.apply_to_installments;
+      if(!description||!Number.isFinite(expected)||expected<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(due))return json({error:"Descrição, valor e data prevista válidos são obrigatórios."},400,origin);
+      if(accountId){
+        const a=await pool.query("select id,account_type from financial_accounts where id=$1 and (owner_id=$2 or owner_id is null)",[accountId,userId]);
+        if(!a.rowCount||a.rows[0].account_type==="credit_card")return json({error:"Selecione uma conta bancária ou dinheiro como destino."},400,origin);
+      }
+      const base=await pool.query("select * from receivables where id=$1 and (owner_id=$2 or owner_id is null)",[id,userId]);
+      if(!base.rowCount)return json({error:"Recebimento não encontrado."},404,origin);
+      const current=base.rows[0];
+      if(applyAll && current.installment_group){
+        const groupRows=await pool.query("select * from receivables where installment_group=$1 and (owner_id=$2 or owner_id is null) order by installment_number,id",[current.installment_group,userId]);
+        const totalCents=Math.round(expected*100),baseCents=Math.floor(totalCents/groupRows.rows.length),rest=totalCents-baseCents*groupRows.rows.length;
+        const client=await pool.connect();
+        try{
+          await client.query("begin");
+          for(let i=0;i<groupRows.rows.length;i++){
+            const row=groupRows.rows[i],cents=baseCents+(i>=groupRows.rows.length-rest?1:0);
+            const d=(await client.query("select ($1::date + make_interval(months => $2::int))::date due",[due,i])).rows[0].due;
+            await client.query(`update receivables set description=$1,expected_amount=$2,due_date=$3,category=$4,receiving_method=$5,observation=$6,account_id=$7,updated_at=now() where id=$8`,
+              [description+" · "+(i+1)+"/"+groupRows.rows.length,cents/100,d,category,method,observation,accountId,row.id]);
+          }
+          await client.query("commit");
+        }catch(e){await client.query("rollback");throw e}finally{client.release()}
+        const rows=await pool.query("select * from receivables where installment_group=$1 and (owner_id=$2 or owner_id is null) order by installment_number,id",[current.installment_group,userId]);
+        return json({updated:rows.rows},200,origin);
+      }
+      const r=await pool.query(`update receivables set description=$1,expected_amount=$2,due_date=$3,category=$4,receiving_method=$5,observation=$6,account_id=$7,updated_at=now() where id=$8 and (owner_id=$9 or owner_id is null) returning *`,
+        [description,Math.round(expected*100)/100,due,category,method,observation,accountId,id,userId]);
+      return json(r.rows[0],200,origin);
+    }
+
+    if(request.method==="POST" && /\\/receivables\\/\\d+\\/receipts$/.test(path)) {
+      const id=Number(path.match(/(\\d+)\\/receipts$/)[1]),b=await request.json().catch(()=>null),amount=Number(b?.amount),receivedDate=text(b?.received_date,10)||new Date().toISOString().slice(0,10),observation=text(b?.observation,500),accountId=idOf(b?.account_id);
+      if(!Number.isFinite(amount)||amount<=0||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(receivedDate))return json({error:"Valor e data do recebimento são obrigatórios."},400,origin);
+      const owner=await pool.query("select owner_id,expected_amount,account_id from receivables where id=$1 and (owner_id=$2 or owner_id is null)",[id,userId]);
       if(!owner.rowCount)return json({error:"Recebimento não encontrado."},404,origin);
+      const finalAccount=accountId||idOf(owner.rows[0].account_id);
+      if(!finalAccount)return json({error:"Selecione a conta de destino antes de registrar o recebimento."},400,origin);
+      const a=await pool.query("select id,account_type from financial_accounts where id=$1 and (owner_id=$2 or owner_id is null)",[finalAccount,userId]);
+      if(!a.rowCount||a.rows[0].account_type==="credit_card")return json({error:"Selecione uma conta bancária ou dinheiro para receber o valor."},400,origin);
       const sum=await pool.query("select coalesce(sum(amount),0) total from receipts where receivable_id=$1",[id]);
       if(Number(sum.rows[0].total)+amount>Number(owner.rows[0].expected_amount)+0.009)return json({error:"O valor recebido não pode ultrapassar o valor previsto."},400,origin);
-      const r=await pool.query("insert into receipts(receivable_id,amount,received_date,observation,owner_id,account_id) values($1,$2,$3,$4,$5,$6) returning id,receivable_id,amount,received_date,observation,account_id,created_at",[id,Math.round(amount*100)/100,receivedDate,observation,userId,accountId]);
+      const r=await pool.query("insert into receipts(receivable_id,amount,received_date,observation,owner_id,account_id) values($1,$2,$3,$4,$5,$6) returning id,receivable_id,amount,received_date,observation,account_id,created_at",[id,Math.round(amount*100)/100,receivedDate,observation,userId,finalAccount]);
+      await pool.query("update receivables set account_id=$1,updated_at=now() where id=$2",[finalAccount,id]);
       return json(r.rows[0],201,origin);
     }
 

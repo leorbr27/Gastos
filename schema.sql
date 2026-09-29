@@ -96,6 +96,24 @@ create index if not exists accounts_owner_idx on financial_accounts(owner_id,act
 alter table receipts add column if not exists account_id bigint references financial_accounts(id) on delete set null;
 create index if not exists transfers_owner_date_idx on transfers(owner_id,transfer_date desc);
 
+create table if not exists recurring_rules (
+  id bigint generated always as identity primary key,
+  rule_type text not null,
+  description text not null,
+  amount numeric(12,2) not null check (amount > 0),
+  category_id bigint references categories(id) on delete set null,
+  card_id bigint references cards(id) on delete set null,
+  first_date date not null,
+  next_date date not null,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  owner_id text,
+  constraint recurring_type_chk check (rule_type in ('expense','receivable'))
+);
+create index if not exists recurring_owner_next_idx on recurring_rules(owner_id,next_date,active);
+
+
+
 insert into categories (name) values
   ('Alimentação'), ('Carro'), ('Contas da casa'), ('Saúde'),
   ('Lazer'), ('Compras'), ('Educação'), ('Assinaturas'),

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#4f46e5"><title>Cadastros · Gastos</title>
+<style>
+:root{--bg:#f5f7fb;--card:#fff;--ink:#172033;--muted:#6b7280;--line:#e7eaf0;--primary:#4f46e5;--primary2:#7c3aed;--radius:20px}*{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#73777d 0,#85898f 250px);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Arial,sans-serif}.container{max-width:920px;margin:auto;padding:20px 16px 48px}.card{background:var(--card);border:1px solid rgba(255,255,255,.8);border-radius:var(--radius);padding:18px;margin-bottom:15px;box-shadow:0 8px 28px rgba(35,45,75,.07)}header{display:flex;justify-content:space-between;align-items:center;gap:12px}h1{font-size:34px;margin:0 0 4px;letter-spacing:-1px}header p{margin:0;color:var(--muted)}.header-actions{display:flex;gap:8px;flex-wrap:wrap}.header-actions a,button{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border:0;border-radius:13px;height:46px;padding:0 16px;font-size:15px;font-weight:800;cursor:pointer}.ghost{background:#f3f4f6;color:#374151}.secondary{background:#eef2ff;color:#4338ca}.primary{width:100%;background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;margin-top:14px}.section-title{display:flex;align-items:center;gap:8px;font-weight:850;font-size:21px;line-height:1.2;margin:0 0 5px}.card-emoji{font-size:22px}.section-description{margin:0 0 14px;color:var(--muted);font-size:13px;line-height:1.45}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.grid>div{min-width:0}label{display:block;font-size:13px;font-weight:750;margin:0 0 7px;color:#374151}input,select{width:100%;height:48px;border:1px solid #d7dbe5;border-radius:13px;background:#fff;padding:0 13px;font-size:16px;color:var(--ink);outline:none}.summary{display:grid;grid-template-columns:1fr 1fr;gap:10px}.metric{border-radius:15px;padding:15px;background:linear-gradient(135deg,#eef2ff,#f5f3ff)}.metric small{display:block;color:var(--muted);font-size:12px}.metric strong{display:block;font-size:20px;margin-top:3px}.item{padding:13px 0;border-bottom:1px solid var(--line);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px}.item:last-child{border-bottom:0}.desc{font-weight:800}.meta{font-size:12px;color:var(--muted);margin-top:4px}.amount{font-weight:850;white-space:nowrap;text-align:right}.item-actions{grid-column:1/-1;display:flex;gap:4px;justify-content:flex-end}.payment{font-size:12px;color:var(--muted);margin-right:auto}.empty{text-align:center;color:var(--muted);padding:24px 5px}.status{display:none;border-radius:13px;padding:11px 13px;margin-bottom:14px;font-size:14px}.status.show{display:block}.error{background:#fef2f2;color:#b91c1c}.ok{background:#ecfdf5;color:#047857}@media(max-width:680px){header{display:block}.header-actions{margin-top:12px}.grid{grid-template-columns:1fr}}@media(max-width:520px){.summary{grid-template-columns:1fr}}
+</style></head><body><div class="container">
+<section class="card"><header><div><h1>Cadastros</h1><p>Contas, cartões de crédito e pessoas.</p></div><div class="header-actions"><a class="ghost" href="./index.html">Voltar</a></div></header></section>
+<div id="status" class="status"></div>
+<section class="card" data-mode="shared">
+<div class="section-title"><span class="card-emoji">🏦</span><span>Contas e cartões</span></div>
+<p class="section-description">Controle onde o dinheiro está e trate o cartão de crédito como uma conta. O pagamento da fatura é uma transferência, não um novo gasto.</p>
+<div class="summary" id="listaContas"><div class="empty">Entre para consultar suas contas.</div></div>
+<div style="height:12px"></div>
+<div class="grid">
+<div><label for="contaNome">Nova conta</label><input id="contaNome" placeholder="Ex.: Nubank, dinheiro, poupança"></div>
+<div><label for="contaTipo">Tipo</label><select id="contaTipo"><option value="bank">Conta bancária</option><option value="cash">Dinheiro</option><option value="credit_card">Cartão de crédito</option></select></div>
+<div><label for="contaSaldo">Saldo inicial</label><input id="contaSaldo" inputmode="decimal" type="number" step="0.01" placeholder="0,00"></div>
+<div><label for="contaCartao">Cartão vinculado</label><select id="contaCartao"><option value="">Nenhum</option></select></div>
+</div>
+<button class="secondary" id="salvarConta" style="width:100%;margin-top:12px">Adicionar conta</button>
+</section>
+<section class="card" data-mode="shared">
+<div class="section-title"><span class="card-emoji">💳</span><span>Cartões de crédito</span></div>
+<p class="section-description">Configure fechamento, vencimento e limite. As compras são lançadas como gastos; o pagamento da fatura é registrado como transferência.</p>
+<div class="grid">
+<div><label for="cartaoNome">Nome do cartão</label><input id="cartaoNome" placeholder="Ex.: Nubank Platinum"></div>
+<div><label for="cartaoFechamento">Dia de fechamento</label><input id="cartaoFechamento" type="number" min="1" max="31" step="1" placeholder="Ex.: 10"></div>
+<div><label for="cartaoVencimento">Dia de vencimento</label><input id="cartaoVencimento" type="number" min="1" max="31" step="1" placeholder="Ex.: 17"></div>
+<div><label for="cartaoLimite">Limite</label><input id="cartaoLimite" type="number" min="0" step="0.01" placeholder="0,00"></div>
+</div>
+<button class="secondary" id="salvarCartao" style="width:100%;margin-top:12px">Adicionar / atualizar cartão</button>
+<div id="listaCartoes" style="margin-top:12px"><div class="empty">Nenhum cartão configurado.</div></div>
+<div style="height:18px"></div>
+<div class="section-title" style="font-size:18px"><span>🧾</span><span>Faturas</span></div>
+<div id="listaFaturas"><div class="empty">Entre para consultar as faturas.</div></div>
+</section>
+
+<section class="card" data-mode="shared">
+<div class="section-title"><span class="card-emoji">👤</span><span>Pessoas</span></div>
+<p class="section-description">Cadastre apenas nome e telefone para vincular uma pessoa aos recebimentos e facilitar cobranças.</p>
+<div class="grid"><div><label for="pessoaNome">Nome</label><input id="pessoaNome" placeholder="Ex.: João Silva"></div><div><label for="pessoaTelefone">Telefone / WhatsApp</label><input id="pessoaTelefone" inputmode="tel" placeholder="Ex.: (27) 99999-9999"></div></div>
+<button class="secondary" id="salvarPessoa" style="width:100%;margin-top:12px">Cadastrar pessoa</button>
+<div id="listaPessoas" style="margin-top:12px"><div class="empty">Nenhuma pessoa cadastrada.</div></div>
+</section>
+
+</div>
+<script type="module">
+const $=id=>document.getElementById(id);const API_BASE="https://br-billowing-river-b43fz1vp-api.compute.c-6.us-east-2.aws.neon.tech";let authClient=null,accounts=[],cards=[],people=[];
+async function getAuthClient(){if(authClient)return authClient;const cfg=await fetch(API_BASE+"/auth-config").then(r=>r.json());if(!cfg.auth_url)throw new Error("Neon Auth ainda não foi provisionado.");const mod=await import("https://esm.sh/@neondatabase/auth");authClient=mod.createInternalNeonAuth(cfg.auth_url);return authClient}
+async function getJWT(){const a=await getAuthClient(),s=await a.adapter.getSession();if(!s?.data?.user){location.href="auth.html";throw new Error("LOGIN_REQUIRED")}return a.getJWTToken()}
+async function api(path,options={}){const token=await getJWT();const r=await fetch(API_BASE+path,{...options,headers:{"Content-Type":"application/json",Authorization:"Bearer "+token,...(options.headers||{})}});const body=await r.text();let data=null;try{data=body?JSON.parse(body):null}catch(e){}if(!r.ok)throw new Error(data?.error||("API HTTP "+r.status));return data}
+const brl=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));const formatDate=x=>{const d=new Date(String(x||"")+"T00:00:00");return Number.isNaN(d.getTime())?String(x||""):d.toLocaleDateString("pt-BR")};
+function status(msg,type="error"){const s=$("status");s.textContent=msg;s.className="status show "+(type==="ok"?"ok":"error");clearTimeout(window.statusTimer);window.statusTimer=setTimeout(()=>s.classList.remove("show"),5000)}
+async function loadAccounts(){const r=await api("/accounts");accounts=Array.isArray(r?.accounts)?r.accounts:[];renderAccounts();fillAccountCardSelect()}
+function renderAccounts(){const el=$("listaContas");el.innerHTML=accounts.length?accounts.map(a=>'<div class="metric"><small>'+esc(a.name)+' · '+(a.account_type==="credit_card"?"Cartão de crédito":a.account_type==="cash"?"Dinheiro":"Conta bancária")+'</small><strong>'+brl(a.balance)+'</strong>'+(a.account_type==="credit_card"?'<div class="meta">Dívida atual: '+brl(a.debt)+'</div>':"")+'</div>').join(""):'<div class="empty">Nenhuma conta cadastrada.</div>'}
+function fillAccountCardSelect(){const el=$("contaCartao");if(!el)return;el.innerHTML='<option value="">Nenhum</option>'+cards.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join("")}
+async function loadCards(){const r=await api("/bootstrap");const d=r?.data&&typeof r.data==="object"?r.data:r;cards=Array.isArray(d?.cards)?d.cards:[];renderCards();fillAccountCardSelect()}
+function renderCards(){const el=$("listaCartoes");if(!el)return;el.innerHTML=cards.length?cards.map(c=>'<div class="item"><div><div class="desc">💳 '+esc(c.name)+'</div><div class="meta">Fechamento dia '+esc(c.closing_day||"—")+' · vencimento dia '+esc(c.due_day||"—")+' · limite '+brl(c.credit_limit||0)+'</div></div></div>').join(""):'<div class="empty">Nenhum cartão configurado.</div>'}
+async function loadPeople(){const r=await api("/people");people=Array.isArray(r?.people)?r.people:[];const el=$("listaPessoas");el.innerHTML=people.length?people.map(p=>'<div class="item"><div><div class="desc">'+esc(p.name)+'</div><div class="meta">'+esc(p.phone)+'</div></div></div>').join(""):'<div class="empty">Nenhuma pessoa cadastrada.</div>'}
+$("salvarPessoa").onclick=async()=>{const name=$("pessoaNome").value.trim(),phone=$("pessoaTelefone").value.trim();if(!name||!phone){alert("Informe nome e telefone.");return}try{await api("/people",{method:"POST",body:JSON.stringify({name,phone})});$("pessoaNome").value="";$("pessoaTelefone").value="";await loadPeople();status("Pessoa cadastrada com sucesso.","ok")}catch(e){status(e.message)}};
+$("salvarConta").onclick=async()=>{const name=$("contaNome").value.trim(),account_type=$("contaTipo").value,opening_balance=Number($("contaSaldo").value||0),card_id=Number($("contaCartao").value)||null;if(!name||!Number.isFinite(opening_balance)){alert("Informe o nome e um saldo inicial válido.");return}if(account_type==="credit_card"&&!card_id){alert("Selecione o cartão de crédito vinculado.");return}try{await api("/accounts",{method:"POST",body:JSON.stringify({name,account_type,opening_balance,card_id})});$("contaNome").value="";$("contaSaldo").value="";await loadAccounts();status("Conta cadastrada com sucesso.","ok")}catch(e){status(e.message)}};
+$("salvarCartao").onclick=async()=>{const name=$("cartaoNome").value.trim(),closing_day=Number($("cartaoFechamento").value)||null,due_day=Number($("cartaoVencimento").value)||null,credit_limit=Number($("cartaoLimite").value||0);if(!name||!credit_limit||!closing_day||!due_day){alert("Informe nome, fechamento, vencimento e limite do cartão.");return}try{await api("/cards",{method:"POST",body:JSON.stringify({name,closing_day,due_day,credit_limit})});$("cartaoNome").value="";$("cartaoFechamento").value="";$("cartaoVencimento").value="";$("cartaoLimite").value="";await loadCards();status("Cartão cadastrado com sucesso.","ok")}catch(e){status(e.message)}};
+(async()=>{try{await loadCards();await loadAccounts();await loadPeople()}catch(e){status(e.message||"Não foi possível carregar os cadastros.")}})();
+</script></body></html>

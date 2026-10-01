@@ -79,7 +79,7 @@ button{border:0;border-radius:13px;height:46px;padding:0 16px;font-size:15px;fon
 
 <div class="chart-card" style="margin-top:14px"><div class="chart-title">Recebimentos</div><div class="section-title"><span class="card-emoji">📥</span><span>Recebimentos</span></div><p class="section-description">Nesta lista aparecem somente os recebimentos previstos para o mês selecionado. As parcelas ficam disponíveis na página completa.</p><div class="toolbar" style="margin-bottom:14px"><div><label for="recebimentoMes">Mês</label><input id="recebimentoMes" type="month"></div><div><label>Parcelas</label><a class="ghost" href="./recebimentos.html" style="display:flex;align-items:center;justify-content:center;text-decoration:none;height:48px;border-radius:13px;font-weight:800">Ver todas as parcelas</a></div></div><div class="summary"><div class="metric"><small>Previsto</small><strong id="recebimentosPrevistos">R$ 0,00</strong></div><div class="metric"><small>Recebido</small><strong id="recebimentosRealizados">R$ 0,00</strong></div><div class="metric"><small>A receber</small><strong id="recebimentosPendentes">R$ 0,00</strong></div><div class="metric"><small>Saldo do período</small><strong id="saldoPeriodo">R$ 0,00</strong></div></div><div id="listaRecebimentos"><div class="empty">Entre para consultar os recebimentos.</div></div></div>
 </section>
-<div class="section-title" style="font-size:18px"><span>🔄</span><span>Nova transferência</span></div>
+<section class="card" data-mode="shared"><div class="section-title"><span class="card-emoji">🔄</span><span>Transferências</span></div><p class="section-description">Registre transferências entre suas contas e pagamentos de fatura.</p><div class="section-title" style="font-size:18px"><span>🔄</span><span>Nova transferência</span></div>
 <div class="grid">
 <div><label for="transferOrigem">Origem</label><select id="transferOrigem"><option value="">Selecione</option></select></div>
 <div><label for="transferDestino">Destino</label><select id="transferDestino"><option value="">Selecione</option></select></div>
@@ -90,6 +90,7 @@ button{border:0;border-radius:13px;height:46px;padding:0 16px;font-size:15px;fon
 </div>
 <button class="primary" id="salvarTransferencia">Registrar transferência</button>
 <div id="listaTransferencias"><div class="empty">Nenhuma transferência registrada.</div></div>
+</section>
 <section class="card" data-mode="shared">
 <div class="section-title"><span class="card-emoji">📅</span><span>Fluxo de caixa</span></div>
 <p class="section-description">Projeção separada do dinheiro disponível, recebimentos previstos e compromissos futuros.</p>

@@ -23,7 +23,7 @@ button{border:0;border-radius:13px;height:46px;padding:0 16px;font-size:15px;fon
 </head>
 <body>
 <div class="container">
-<section class="card top-card"><header><div><h1>Meus gastos</h1><p>Controle por período, categoria e meio de pagamento.</p></div><div class="header-actions"><a class="ghost" href="./cadastros.html">Cadastros</a><a class="ghost" id="dividirConta" href="./dividir_conta/index.html">Dividir conta</a><button class="secondary" id="baixar">Baixar dados</button><button class="ghost" id="entrar">Entrar</button><button class="ghost" id="sair" style="display:none">Sair</button></div></header></section>
+<section class="card top-card"><header><div><h1>Meus gastos</h1><p>Controle por período, categoria e meio de pagamento.</p></div><div class="header-actions"><a class="ghost" href="./cadastros.html">Cadastros</a><a class="ghost" id="dividirConta" href="./dividir_conta/index.html">Dividir conta</a><button class="secondary" id="baixar">Baixar dados</button></div></header></section>
 <div id="status" class="status"></div><section class="mode-switch" aria-label="Tipo de lançamento"><button type="button" class="supercard active" id="modeExpense"><span>💸</span><strong>Gastos</strong><small>Despesas, análises, filtros e lançamentos</small></button><button type="button" class="supercard" id="modeIncome"><span>💰</span><strong>Recebimentos</strong><small>Valores previstos, recebidos e pendentes</small></button></section><section class="card" id="formCard" data-mode="expense">
 <div class="section-title" id="formTitle"><span class="card-emoji">💸</span><span>Novo gasto</span></div><p class="section-description">Cadastre uma nova despesa informando valor, data, categoria, pagamento e observação.</p>
 <div class="grid">
@@ -305,7 +305,7 @@ if($("salvarPessoa"))$("salvarPessoa").onclick=async()=>{const name=$("pessoaNom
 if($("salvarConta"))$("salvarConta").onclick=async()=>{const name=$("contaNome").value.trim(),account_type=$("contaTipo").value,opening_balance=Number($("contaSaldo").value||0),card_id=Number($("contaCartao").value)||null;if(!name||!Number.isFinite(opening_balance)){alert("Informe o nome e um saldo inicial válido.");return}if(account_type==="credit_card"&&!card_id){alert("Selecione o cartão de crédito vinculado.");return}try{await api("/accounts",{method:"POST",body:JSON.stringify({name,account_type,opening_balance,card_id})});$("contaNome").value="";$("contaSaldo").value="";await loadAccounts();showStatus("Conta adicionada com sucesso.","ok")}catch(e){showStatus(e.message||"Não foi possível adicionar a conta.")}};
 $("salvarTransferencia").onclick=async()=>{const source_account_id=Number($("transferOrigem").value),destination_account_id=Number($("transferDestino").value),amount=Number($("transferValor").value),transfer_date=$("transferData").value,transfer_type=$("transferTipo").value,description=$("transferDescricao").value.trim();if(!source_account_id||!destination_account_id||!Number.isFinite(amount)||amount<=0||!transfer_date){alert("Preencha origem, destino, valor e data.");return}try{await api("/transfers",{method:"POST",body:JSON.stringify({source_account_id,destination_account_id,amount,transfer_date,transfer_type,description})});$("transferValor").value="";$("transferDescricao").value="";await loadAccounts();showStatus("Transferência registrada com sucesso.","ok")}catch(e){showStatus(e.message||"Não foi possível registrar a transferência.")}};
 $("baixar").onclick=()=>{location.href="export.html"};
-$("entrar").onclick=()=>{window.location.assign("./auth.html")};
+
 $("conciliacaoStatus").onchange=carregarRevisao;
 $("conciliacaoConta").onchange=carregarRevisao;
 $("arquivoCsv").onchange=async e=>{const file=e.target.files?.[0];if(!file){csvRows=[];$("importarCsv").disabled=true;renderCsvPreview();return}const text=await file.text(),raw=parseCsvText(text);csvRows=raw.map(o=>{const date=csvField(o,["data","date","transaction_date","dt"]),desc=csvField(o,["descricao","descrição","description","historico","histórico","memo"]),amt=normalizeCsvAmount(csvField(o,["valor","amount","value"]));return {transaction_date:date.slice(0,10),description:desc,amount:amt,external_id:csvField(o,["id","id_externo","external_id","codigo","documento"])} }).filter(x=>x.transaction_date&&x.description&&Number.isFinite(x.amount));renderCsvPreview();$("importarCsv").disabled=!csvRows.length};
@@ -323,22 +323,18 @@ function setMode(mode){
 $("modeExpense").onclick=()=>setMode("expense");
 $("modeIncome").onclick=()=>setMode("income");
 function setAuthUI(logged){
-  $("entrar").style.display=logged?"none":"";
-  $("sair").style.display=logged?"":"none";
-  $("baixar").style.display=logged?"":"none";
+  if($("entrar")) $("entrar").style.display="none";
+  if($("sair")) $("sair").style.display="none";
+  if($("baixar")) $("baixar").style.display="";
 }
 $("fPeriodo").onchange=render;$("fCategoria").onchange=render;$("fPagamento").onchange=render;async function loadAllExpenses(){const out=[];let offset=0,total=Infinity;while(offset<total){const page=await api("/expenses?limit=100&offset="+offset);const rows=Array.isArray(page?.expenses)?page.expenses:[];out.push(...rows);total=Number(page?.total??out.length);if(!rows.length)break;offset+=rows.length}return out}function normalizeBootstrap(raw){const d=raw?.data&&typeof raw.data==="object"&&!Array.isArray(raw.data)?raw.data:raw;const normList=v=>{if(Array.isArray(v))return v;if(v&&typeof v==="object")return Object.entries(v).map(([id,x])=>typeof x==="object"?{id,...x}:{id,name:String(x)});return[]};const normExpenses=v=>normList(v).map(x=>x.expense&&typeof x.expense==="object"?{...x.expense}:x);return{categories:normList(d?.categories??raw?.categories),cards:normList(d?.cards??raw?.cards),expenses:normExpenses(d?.expenses??raw?.expenses)}}async function load(){
   let raw,d,logged=false;
   try{
     raw=await api("/bootstrap");
     d=normalizeBootstrap(raw);
-    try{
-      const a=await getAuthClient();
-      const session=await a.adapter.getSession();
-      logged=!!session?.data?.user;
-    }catch(e){logged=false}
-    if(logged){d.expenses=await loadAllExpenses();await loadAccounts();await loadPeople();await loadReceivables()}else{d.expenses=[];receivables=[];accounts=[];}
-    setAuthUI(logged);
+    logged=true;
+    d.expenses=await loadAllExpenses();await loadAccounts();await loadPeople();await loadReceivables();
+    setAuthUI(true);
   }catch(e){console.error("Falha ao consultar o Neon:",e);if(e?.message==="LOGIN_REQUIRED"){setAuthUI(false);showStatus("Entre para consultar, editar ou excluir os gastos já cadastrados.");return}showStatus("Erro ao carregar o Neon: "+(e?.message||e));return}try{categories=Array.isArray(d.categories)?d.categories:[];cards=Array.isArray(d.cards)?d.cards:[];expenses=Array.isArray(d.expenses)?d.expenses:[];if(!categories.length){categories=[{id:1,name:"Alimentação"},{id:1182,name:"Carro"},{id:3,name:"Contas da casa"},{id:4,name:"Saúde"},{id:5,name:"Lazer"},{id:6,name:"Compras"},{id:7,name:"Educação"},{id:8,name:"Assinaturas"},{id:9,name:"Trabalho"},{id:10,name:"Outros"},{id:1191,name:"Lanches"},{id:1192,name:"Empréstimos feitos"},{id:1193,name:"Empréstimos tomados"},{id:1194,name:"Impostos e taxas"},{id:1195,name:"Moto"},{id:1196,name:"Transporte por aplicativo"}];}fillSelects();renderCards();buildPeriods();if(logged){render();renderCards();await loadCardStatements();await loadRecurring();await loadDashboard()}else{$("total").textContent="R$ 0,00";$("quantidade").textContent="—";$("chartCategoria").innerHTML='<div class="empty">Login necessário para consultar</div>';$("chartPagamento").innerHTML='<div class="empty">Login necessário para consultar</div>';$("legendCategoria").innerHTML="";$("legendPagamento").innerHTML="";$("lista").innerHTML='<div class="empty">Os lançamentos já cadastrados ficam disponíveis após o login.</div>'} }catch(e){console.error("Falha ao renderizar a página:",e);showStatus("Erro na interface: "+(e?.message||e))}}setMode("expense");
 load();
 

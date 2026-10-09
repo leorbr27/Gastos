@@ -1,11 +1,7 @@
 import pg from "pg";
 import { attachDatabasePool } from "@neon/functions";
-import { createRemoteJWKSet, jwtVerify } from "jose";
 const { Pool } = pg;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5, idleTimeoutMillis: 30000 });
-const AUTH_BASE=String(process.env.NEON_AUTH_BASE_URL||"").replace(/\/$/,"");
-const JWKS_URL=String(process.env.NEON_AUTH_JWKS_URL||"").trim() || (AUTH_BASE ? AUTH_BASE+"/.well-known/jwks.json" : "");
-const JWKS=JWKS_URL ? createRemoteJWKSet(new URL(JWKS_URL)) : null;
 attachDatabasePool(pool);
 
 let schemaReady;
@@ -171,13 +167,7 @@ const headers = (origin) => ({
 const json = (data,status,origin) => new Response(JSON.stringify(data),{status,headers:headers(origin)});
 const text = (v,max=200) => String(v ?? "").trim().slice(0,max);
 const idOf = v => Number.isInteger(Number(v)) && Number(v)>0 ? Number(v) : null;
-async function requireUser(request){
-  if(!JWKS) throw new Error("AUTH_NOT_CONFIGURED");
-  const raw=request.headers.get("authorization")||"";
-  if(!/^Bearer\s+/i.test(raw)) throw new Error("AUTH_REQUIRED");
-  try { const {payload}=await jwtVerify(raw.replace(/^Bearer\s+/i,"").trim(),JWKS); const sub=String(payload.sub||"").trim(); if(!sub) throw new Error("AUTH_REQUIRED"); return sub; }
-  catch(e){ if(e?.message==="AUTH_REQUIRED") throw e; throw new Error("AUTH_INVALID"); }
-}
+async function requireUser(request){ return null; }
 
 async function expenseQuery(where="", params=[], limit=null, offset=0) {
   const r=await pool.query(`select e.id,e.description,e.amount,e.expense_date,e.created_at,e.updated_at,e.observation,e.category_id,c.name category_name,
@@ -198,12 +188,12 @@ export default async function handler(request) {
   try {
     await ensureSchema();
     const isPublicBootstrap=request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"));
-    const userId=(path==="/auth-config" || isPublicBootstrap)?null:await requireUser(request);
+    const userId=null;
     if(userId) await pool.query("update expenses set owner_id=$1 where owner_id is null",[userId]);
 
     if(request.method==="GET" && path==="/auth-config") return json({auth_url:AUTH_BASE},200,origin);
 
-    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.12",schema_version:13,auth:true,pagination:true,receivables:true,partial_receipts:true,receivable_installments:true,receivable_edit:true,receivable_destination_account:true,accounts:true,transfers:true,reconciliation_manual:true,auth_required_for_writes:true},200,origin);
+    if(request.method==="GET" && path==="/version") return json({api_version:"2026.09.29.12",schema_version:13,auth:false,pagination:true,receivables:true,partial_receipts:true,receivable_installments:true,receivable_edit:true,receivable_destination_account:true,accounts:true,transfers:true,reconciliation_manual:true,auth_required_for_writes:false},200,origin);
 
     if(request.method==="GET" && (path==="/" || path.endsWith("/bootstrap"))) {
       const [categories,cards]=await Promise.all([

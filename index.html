@@ -284,7 +284,7 @@ async function carregarOpcoes(id){
 async function desfazerRevisao(id){
   try{const base="/re"+"conciliation";await api(base+"/"+id+"/unmatch",{method:"POST"});await carregarRevisao();await loadAccounts();showStatus("Associação desfeita.","ok")}catch(e){showStatus(diagnosticMessage(e,"Não foi possível desfazer a associação."))}
 }
-async function loadPeople(){const r=await api("/people");people=Array.isArray(r?.people)?r.people:[];fillPeopleSelect();renderPeople()}
+async function loadPeople(){try{const r=await api("/people");people=Array.isArray(r?.people)?r.people:[]}catch(e){people=[];console.warn("Cadastro de pessoas indisponível: endpoint /people não existe na API atual.",e)}fillPeopleSelect();renderPeople()}
 function fillPeopleSelect(selected=""){const opts='<option value="">Selecione</option>'+people.map(p=>'<option value="'+p.id+'" '+(Number(p.id)===Number(selected)?"selected":"")+'>'+esc(p.name)+' · '+esc(p.phone)+'</option>').join("");if($("recebimentoPessoa"))$("recebimentoPessoa").innerHTML=opts}
 function renderPeople(){if(!$("listaPessoas"))return;$("listaPessoas").innerHTML=people.length?people.map(p=>'<div class="item"><div><div class="desc">'+esc(p.name)+'</div><div class="meta">'+esc(p.phone)+'</div></div></div>').join(""):'<div class="empty">Nenhuma pessoa cadastrada.</div>'}
 async function loadAccounts(){const r=await api("/accounts");accounts=Array.isArray(r?.accounts)?r.accounts:[];renderAccounts();fillAccountSelects();fillReconciliationAccounts();const t=await api("/transfers");renderTransfers(Array.isArray(t?.transfers)?t.transfers:[]);await loadCashFlow()}

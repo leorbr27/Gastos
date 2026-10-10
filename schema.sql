@@ -1,4 +1,4 @@
--- Banco de dados do projeto Gastos
+-- Banco de dados do projeto Contas
 create table if not exists categories (
   id bigint generated always as identity primary key,
   name text not null unique,

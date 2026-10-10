@@ -1,2 +1,2 @@
-# Gastos
-Gastos da semana
+# Contas
+Controle financeiro pessoal

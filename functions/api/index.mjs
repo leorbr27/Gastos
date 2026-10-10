@@ -75,6 +75,14 @@ async function ensureSchema() {
     create index if not exists receivables_owner_date_idx on receivables(owner_id,due_date desc);
     create index if not exists receivables_installment_group_idx on receivables(installment_group);
     create index if not exists receipts_receivable_idx on receipts(receivable_id);
+    create table if not exists people (
+      id bigint generated always as identity primary key,
+      name text not null,
+      phone text not null,
+      created_at timestamptz not null default now(),
+      owner_id text
+    );
+    create index if not exists people_name_idx on people(name);
     create table if not exists financial_accounts (
       id bigint generated always as identity primary key,
       name text not null unique,
@@ -201,6 +209,18 @@ export default async function handler(request) {
         pool.query("select id,name,closing_day,due_day,credit_limit from cards where active=true order by case when name='Pix' then 0 when name='Dinheiro' then 1 else 2 end,name"),
       ]);
       return json({categories:categories.rows,cards:cards.rows},200,origin);
+    }
+
+    if(request.method==="GET" && path.endsWith("/people")) {
+      const rows=await pool.query("select id,name,phone,created_at from people where owner_id is null or owner_id=$1 order by name,id",[userId]);
+      return json({people:rows.rows},200,origin);
+    }
+
+    if(request.method==="POST" && path.endsWith("/people")) {
+      const b=await request.json().catch(()=>null),name=text(b?.name,150),phone=text(b?.phone,50);
+      if(!name||!phone)return json({error:"Nome e telefone são obrigatórios."},400,origin);
+      const r=await pool.query("insert into people(name,phone,owner_id) values($1,$2,$3) returning id,name,phone,created_at",[name,phone,userId]);
+      return json(r.rows[0],201,origin);
     }
 
     if(request.method==="GET" && path.endsWith("/receivables")) {

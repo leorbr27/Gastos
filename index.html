@@ -151,8 +151,10 @@ async function loadReceivables(){
     const r=await api("/receivables?month="+encodeURIComponent(month)+"&limit=100&offset=0");
     receivables=Array.isArray(r?.receivables)?r.receivables:[]
   }catch(e){
-    if(String(e?.message||"").includes("Endpoint não encontrado")){receivables=[]}
-    else{throw e}
+    receivables=[];
+    console.error("Falha real ao carregar recebimentos em /receivables:",e);
+    const detail=String(e?.message||"");
+    if(!detail.includes("HTTP 500")&&!detail.includes("HTTP_ERROR")&&!detail.includes("Endpoint não encontrado")) throw e;
   }
   renderReceivables()
 }

@@ -323,10 +323,21 @@ $("fPeriodo").onchange=render;$("fCategoria").onchange=render;$("fPagamento").on
   try{
     raw=await api("/bootstrap");
     d=normalizeBootstrap(raw);
-
-    d.expenses=await loadAllExpenses();await loadAccounts();await loadPeople();await loadReceivables();
+  }catch(e){console.error("Falha ao consultar o Neon:",e);showStatus("Erro ao carregar o Neon: "+diagnosticMessage(e,"Erro desconhecido"));return}
+  categories=Array.isArray(d.categories)?d.categories:[];
+  cards=Array.isArray(d.cards)?d.cards:[];
+  if(!categories.length){categories=[{id:1,name:"Alimentação"},{id:1182,name:"Carro"},{id:3,name:"Contas da casa"},{id:4,name:"Saúde"},{id:5,name:"Lazer"},{id:6,name:"Compras"},{id:7,name:"Educação"},{id:8,name:"Assinaturas"},{id:9,name:"Trabalho"},{id:10,name:"Outros"},{id:1191,name:"Lanches"},{id:1192,name:"Empréstimos feitos"},{id:1193,name:"Empréstimos tomados"},{id:1194,name:"Impostos e taxas"},{id:1195,name:"Moto"},{id:1196,name:"Transporte por aplicativo"}];}
+  fillSelects();
+  try{
+    d.expenses=await loadAllExpenses();
+    await loadAccounts();await loadPeople();await loadReceivables();
     setAuthUI();
-  }catch(e){console.error("Falha ao consultar o Neon:",e);showStatus("Erro ao carregar o Neon: "+diagnosticMessage(e,"Erro desconhecido"));return}try{categories=Array.isArray(d.categories)?d.categories:[];cards=Array.isArray(d.cards)?d.cards:[];expenses=Array.isArray(d.expenses)?d.expenses:[];if(!categories.length){categories=[{id:1,name:"Alimentação"},{id:1182,name:"Carro"},{id:3,name:"Contas da casa"},{id:4,name:"Saúde"},{id:5,name:"Lazer"},{id:6,name:"Compras"},{id:7,name:"Educação"},{id:8,name:"Assinaturas"},{id:9,name:"Trabalho"},{id:10,name:"Outros"},{id:1191,name:"Lanches"},{id:1192,name:"Empréstimos feitos"},{id:1193,name:"Empréstimos tomados"},{id:1194,name:"Impostos e taxas"},{id:1195,name:"Moto"},{id:1196,name:"Transporte por aplicativo"}];}fillSelects();renderCards();buildPeriods();render();renderCards();await loadCardStatements();await loadRecurring();await loadDashboard() }catch(e){console.error("Falha ao renderizar a página:",e);showStatus("Erro na interface: "+diagnosticMessage(e,"Erro desconhecido"))}}setMode("expense");
+  }catch(e){console.error("Falha ao carregar dados complementares:",e);showStatus("Categorias e meios de pagamento foram carregados, mas alguns dados complementares falharam: "+diagnosticMessage(e,"Erro desconhecido"))}
+  try{
+    expenses=Array.isArray(d.expenses)?d.expenses:[];
+    fillSelects();renderCards();buildPeriods();render();renderCards();await loadCardStatements();await loadRecurring();await loadDashboard();
+  }catch(e){console.error("Falha ao renderizar a página:",e);showStatus("Erro na interface: "+diagnosticMessage(e,"Erro desconhecido"))}
+}setMode("expense");
 load();
 
 </script>

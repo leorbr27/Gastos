@@ -4,7 +4,7 @@ export default defineConfig({
   auth: false,
   functions: {
     api: {
-      name: "Gastos API",
+      name: "Contas API",
       source: "./functions/api"
     }
   }
